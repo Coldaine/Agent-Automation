@@ -9,4 +9,9 @@ google-generativeai>=0.8
 python-dotenv>=1.0
 pytest>=8.0
 ruff>=0.6
-black>=24.8
+## Black removed; Ruff handles linting/autofix
+## Optional extras for Phase 2 features
+pytesseract>=0.3.10
+pywinauto>=0.6.8 ; platform_system == "Windows"
+## Windows-specific performance optimizations
+pywin32>=306 ; platform_system == "Windows"

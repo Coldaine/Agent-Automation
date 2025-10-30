@@ -1,18 +1,20 @@
-PY=python
-PIP=pip
+PY?=python
+
+# Cross-platform dev commands using uv (no manual activation needed)
+# Requires: uv (https://github.com/astral-sh/uv)
 
 setup:
-	$(PY) -m venv .venv
-	. .venv/bin/activate && $(PIP) install -U pip && $(PIP) install -r requirements.txt
+	uv sync || (uv venv && uv pip install -r requirements.txt)
 
 run:
-	. .venv/bin/activate && PYTHONPATH=. $(PY) -m agent.main
+	uv run -m agent.main
 
 test:
-	. .venv/bin/activate && PYTHONPATH=. pytest -q
+	uv run -m pytest -q
 
 lint:
-	. .venv/bin/activate && ruff check .
+	uv run ruff check .
 
 format:
-	. .venv/bin/activate && ruff check . --fix && black .
+	# Ruff autofix only (Black removed)
+	uv run ruff check . --fix

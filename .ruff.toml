@@ -1,0 +1,15 @@
+# Ruff configuration for this repo
+# We prefer compact style; ignore some stylistic rules and rely on Ruff autofix.
+line-length = 100
+fix = true
+target-version = "py310"
+
+[lint]
+# Allow multiple imports/statements per line to preserve current compact style
+ignore = [
+  "E401",  # multiple imports on one line
+  "E701",  # multiple statements on one line (colon)
+  "E702",  # multiple statements on one line (semicolon)
+  "E703",  # statement ends with semicolon
+  "F401",  # unused imports (temporarily ignored to avoid churn)
+]
