@@ -33,12 +33,12 @@ The DesktopOps Agent is a minimal, **local-first** AI agent designed for convers
 
 ### Development Tools
 - `pytest>=8.0`: Unit testing framework
-- `ruff>=0.6`: Linting and code quality
-- `black>=24.8`: Code formatting
+- `ruff>=0.6`: Linting and auto-fix (Ruff-only; Black removed)
 
 ## Setup Steps
 
 ### Environment Setup
+Environment managed with [uv](https://github.com/astral-sh/uv).
 ```bash
 # Install Python dependencies in virtual environment
 make setup
@@ -54,12 +54,16 @@ cp .env.sample .env
 ```
 
 ### OS Permissions
+#### Windows (Primary Platform - Optimized)
+- No special permissions required for standard operation
+- Windows UIA enabled by default for semantic control
+- Native win32 APIs provide faster input and screenshots
+- Tesseract OCR recommended for CLICK_TEXT actions
+- Install via: `winget install --id UB-Mannheim.TesseractOCR -e`
+
 #### macOS
 - **Accessibility**: Required for keyboard and mouse control
 - **Screen Recording**: Required for screenshots
-
-#### Windows
-- Optional UIA integration (pywinauto) for semantic automation
 
 #### Linux
 - Prefer X11 for synthetic input; Wayland compositors may restrict functionality
