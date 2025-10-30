@@ -1,4 +1,5 @@
 from __future__ import annotations
+# Environment: managed with 'uv' (https://github.com/astral-sh/uv). See README for setup.
 import json
 from typing import Any, Dict, Tuple
 
@@ -6,7 +7,9 @@ REQUIRED_KEYS = {"plan", "next_action", "args", "done"}
 
 VALID_ACTIONS = {
     "MOVE","CLICK","DOUBLE_CLICK","RIGHT_CLICK","TYPE","HOTKEY",
-    "SCROLL","DRAG","WAIT","NONE"
+    "SCROLL","DRAG","WAIT","NONE",
+    # Phase 2 actions
+    "CLICK_TEXT","UIA_INVOKE","UIA_SET_VALUE"
 }
 
 def parse_structured_output(raw_text: str) -> Tuple[Dict[str, Any], str]:

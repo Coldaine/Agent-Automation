@@ -1,4 +1,5 @@
 from __future__ import annotations
+# Environment: managed with 'uv' (https://github.com/astral-sh/uv). See README for setup.
 import argparse, os, sys, yaml
 from datetime import datetime, timezone
 from dotenv import load_dotenv

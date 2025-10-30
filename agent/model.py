@@ -1,5 +1,6 @@
 from __future__ import annotations
-import os, json
+# Environment: managed with 'uv' (https://github.com/astral-sh/uv). See README for setup.
+import os
 from typing import Any, Dict, List, Optional
 
 class BaseModelAdapter:
@@ -63,7 +64,11 @@ class OpenAIAdapter(BaseModelAdapter):
                     "plan": {"type": "string"},
                     "say": {"type": "string"},
                     "next_action": {"type": "string",
-                        "enum": ["MOVE","CLICK","DOUBLE_CLICK","RIGHT_CLICK","TYPE","HOTKEY","SCROLL","DRAG","WAIT","NONE"]},
+                        "enum": [
+                            "MOVE","CLICK","DOUBLE_CLICK","RIGHT_CLICK","TYPE","HOTKEY",
+                            "SCROLL","DRAG","WAIT","NONE",
+                            "CLICK_TEXT","UIA_INVOKE","UIA_SET_VALUE"
+                        ]},
                     "args": {"type": "object"},
                     "done": {"type": "boolean"}
                 },
@@ -108,9 +113,10 @@ class ZhipuAdapter(BaseModelAdapter):
     """Z.ai (Zhipu) adapter using OpenAI-compatible coding plan endpoint."""
     def __init__(self, model: str, temperature: float, max_output_tokens: int):
         from openai import OpenAI
+        base_url = os.environ.get("ZHIPU_BASE_URL", "https://api.z.ai/api/coding/paas/v4")
         self.client = OpenAI(
             api_key=os.environ.get("ZHIPU_API_KEY"),
-            base_url="https://api.z.ai/api/coding/paas/v4"
+            base_url=base_url,
         )
         self.model = model
         self.temperature = temperature
@@ -120,9 +126,9 @@ class ZhipuAdapter(BaseModelAdapter):
         system_prompt = (
             "You are DesktopOps: a careful, step-by-step desktop operator. "
             "Return ONLY a valid JSON object (no markdown fences) with these exact keys: plan, say, next_action, args, done. "
-            "next_action must be one of: MOVE, CLICK, DOUBLE_CLICK, RIGHT_CLICK, TYPE, HOTKEY, SCROLL, DRAG, WAIT, NONE. "
-            "args must be a JSON object. done must be boolean. "
-            "Keep 'plan' concise (<=80 chars)."
+            "next_action must be one of: MOVE, CLICK, DOUBLE_CLICK, RIGHT_CLICK, TYPE, HOTKEY, SCROLL, DRAG, WAIT, NONE, CLICK_TEXT, UIA_INVOKE, UIA_SET_VALUE. "
+            "args must be a JSON object. done must be boolean. Keep 'plan' concise (<=80 chars). "
+            "You may use CLICK_TEXT {text,min_score?} for OCR, and UIA_INVOKE/UIA_SET_VALUE with a selector on Windows. Prefer UIA when available."
         )
 
         user_content = f"Instruction: {instruction}\nLast observation: {last_observation}\nRecent steps: {recent_steps[-6:] if recent_steps else []}\nRespond with the required JSON object."
@@ -140,14 +146,26 @@ class ZhipuAdapter(BaseModelAdapter):
         #         {"type": "image_url", "image_url": {"url": image_b64_jpeg}}
         #     ]
 
-        resp = self.client.chat.completions.create(
-            model=self.model,
-            temperature=self.temperature,
-            messages=messages,
-            max_tokens=self.max_output_tokens,
+        # Simple retry loop with bounded attempts
+        for attempt in range(3):
+            try:
+                resp = self.client.chat.completions.create(
+                    model=self.model,
+                    temperature=self.temperature,
+                    messages=messages,
+                    max_tokens=self.max_output_tokens,
+                    timeout=30,
+                )
+                m = resp.choices[0].message
+                return m.content
+            except Exception:  # network/timeouts/rate limits
+                import time as _t
+                _t.sleep(0.5 * (attempt + 1))
+        # Fallback payload if all attempts failed
+        return (
+            '{"plan":"handle provider error","say":"Temporary provider error; please retry.",'
+            '"next_action":"NONE","args":{},"done":false}'
         )
-        m = resp.choices[0].message
-        return m.content
 
 class GeminiAdapter(BaseModelAdapter):
     def __init__(self, model: str, temperature: float, max_output_tokens: int):
@@ -172,9 +190,14 @@ class GeminiAdapter(BaseModelAdapter):
         return resp.text
 
 def get_adapter(provider: str, model: str, temperature: float, max_output_tokens: int) -> BaseModelAdapter:
-    if provider == "openai": return OpenAIAdapter(model, temperature, max_output_tokens)
-    if provider == "anthropic": return AnthropicAdapter(model, temperature, max_output_tokens)
-    if provider == "gemini": return GeminiAdapter(model, temperature, max_output_tokens)
-    if provider == "zhipu": return ZhipuAdapter(model, temperature, max_output_tokens)
-    if provider == "dummy": return DummyAdapter()
+    if provider == "openai":
+        return OpenAIAdapter(model, temperature, max_output_tokens)
+    if provider == "anthropic":
+        return AnthropicAdapter(model, temperature, max_output_tokens)
+    if provider == "gemini":
+        return GeminiAdapter(model, temperature, max_output_tokens)
+    if provider == "zhipu":
+        return ZhipuAdapter(model, temperature, max_output_tokens)
+    if provider == "dummy":
+        return DummyAdapter()
     raise ValueError(f"Unknown provider: {provider}")

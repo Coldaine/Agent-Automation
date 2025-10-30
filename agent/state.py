@@ -1,4 +1,5 @@
 from __future__ import annotations
+# Environment: managed with 'uv' (https://github.com/astral-sh/uv). See README for setup.
 from dataclasses import dataclass, asdict
 from typing import Any, Dict, Optional
 

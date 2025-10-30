@@ -15,13 +15,30 @@ dry_run: true             # set to false for real control
 overlay:
   enabled: false
   duration_ms: 250
+  always_on:
+    enabled: false
+    radius: 18
+    poll_ms: 80
 loop:
   max_steps: 50
-  min_interval_ms: 400
+  min_interval_ms: 200    # Reduced for Windows native performance
 screenshot:
   width: 1280
-  quality: 70
+  quality: 75             # Slightly higher for better OCR accuracy
 throttle_ms: 0
 hotkeys:
   pause: "ctrl+alt+p"
   stop: "ctrl+alt+s"
+
+windows_uia:
+  enabled: true            # Enable by default on Windows for semantic control
+  timeout_ms: 1500
+  prefer_uia: true         # Prefer UIA over pixel coordinates when available
+
+ocr:
+  enabled: true            # Enable by default for CLICK_TEXT support
+  language: eng
+  min_score: 0.70
+  psm: 6
+  oem: 3
+  region: null             # [left,top,width,height] or null for full screen
