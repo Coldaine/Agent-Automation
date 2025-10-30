@@ -2,12 +2,12 @@
 # Available providers: openai | zhipu | anthropic | gemini | dummy
 #
 # Option 1: OpenAI GPT-5 (highest quality, higher cost)
-provider: openai
-model: gpt-5-2025-08-07
+# provider: openai
+# model: gpt-5-2025-08-07
 #
-# Option 2: Z.ai GLM-4.5v (lower cost, good quality)
-# provider: zhipu
-# model: glm-4.5v
+# Option 2: Z.ai GLM-4.6 (coding plan model) - ACTIVE
+provider: zhipu
+model: glm-4.6
 #
 temperature: 0.2
 max_output_tokens: 800

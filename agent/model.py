@@ -119,45 +119,35 @@ class ZhipuAdapter(BaseModelAdapter):
     def step(self, instruction: str, last_observation: str, recent_steps, image_b64_jpeg):
         system_prompt = (
             "You are DesktopOps: a careful, step-by-step desktop operator. "
-            "Return ONLY a JSON object with keys: plan, say, next_action, args, done. "
-            "next_action ∈ {MOVE, CLICK, DOUBLE_CLICK, RIGHT_CLICK, TYPE, HOTKEY, SCROLL, DRAG, WAIT, NONE}. "
-            "Keep 'plan' concise (<=80 chars). Use absolute screen coordinates for pointer actions when needed. "
-            "If you need the user, set next_action:'NONE' and done:false with a clear 'say'."
+            "Return ONLY a valid JSON object (no markdown fences) with these exact keys: plan, say, next_action, args, done. "
+            "next_action must be one of: MOVE, CLICK, DOUBLE_CLICK, RIGHT_CLICK, TYPE, HOTKEY, SCROLL, DRAG, WAIT, NONE. "
+            "args must be a JSON object. done must be boolean. "
+            "Keep 'plan' concise (<=80 chars)."
         )
+
+        user_content = f"Instruction: {instruction}\nLast observation: {last_observation}\nRecent steps: {recent_steps[-6:] if recent_steps else []}\nRespond with the required JSON object."
+
+        # Z.ai coding plan API - simplified message format
         messages = [
             {"role": "system", "content": system_prompt},
-            {"role": "user", "content": [
-                {"type": "text", "text": f"Instruction: {instruction}\nLast observation: {last_observation}\nRecent steps: {recent_steps[-6:] if recent_steps else []}\nRespond with required JSON only."}
-            ]}
+            {"role": "user", "content": user_content}
         ]
-        if image_b64_jpeg:
-            messages[1]["content"].append({"type": "image_url", "image_url": {"url": image_b64_jpeg}})
 
-        schema = {
-            "name": "desktop_step",
-            "schema": {
-                "type": "object",
-                "properties": {
-                    "plan": {"type": "string"},
-                    "say": {"type": "string"},
-                    "next_action": {"type": "string",
-                        "enum": ["MOVE","CLICK","DOUBLE_CLICK","RIGHT_CLICK","TYPE","HOTKEY","SCROLL","DRAG","WAIT","NONE"]},
-                    "args": {"type": "object"},
-                    "done": {"type": "boolean"}
-                },
-                "required": ["plan","next_action","args","done"],
-                "additionalProperties": False
-            }
-        }
+        # Note: Z.ai may not fully support multimodal yet, skipping image for now
+        # if image_b64_jpeg:
+        #     messages[1]["content"] = [
+        #         {"type": "text", "text": user_content},
+        #         {"type": "image_url", "image_url": {"url": image_b64_jpeg}}
+        #     ]
+
         resp = self.client.chat.completions.create(
             model=self.model,
             temperature=self.temperature,
             messages=messages,
-            response_format={"type": "json_schema", "json_schema": schema},
             max_tokens=self.max_output_tokens,
         )
         m = resp.choices[0].message
-        return getattr(m, "parsed", None) or m.content
+        return m.content
 
 class GeminiAdapter(BaseModelAdapter):
     def __init__(self, model: str, temperature: float, max_output_tokens: int):
