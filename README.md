@@ -6,19 +6,32 @@ A minimal, **local-first** agent that you can chat with while it controls your *
 
 ---
 
-## Quickstart
+## Quickstart (Windows Optimized)
 
-```bash
-# 1) Python 3.10+ recommended
-make setup
+```powershell
+# 1) Install uv (once). On Windows PowerShell:
+winget install --id Astral.UV -e    # or: pipx install uv
 
-# 2) Configure provider & options
-cp .env.sample .env              # add your API keys
+# 2) Install Tesseract OCR for CLICK_TEXT support:
+winget install --id UB-Mannheim.TesseractOCR -e
+# Verify: tesseract --version
+
+# 3) Create/refresh the virtual env and install deps
+uv sync || (uv venv; uv pip install -r requirements.txt)
+
+# 4) Configure provider & options
+Copy-Item .env.sample .env          # add your API keys
 # edit config.yaml if desired (provider/model, dry_run, overlay, hotkeys)
 
-# 3) Run the agent
-make run
+# 5) Run the agent
+uv run -m agent.main
 ```
+
+### Windows Performance Notes
+- Native win32 API used for mouse/keyboard (faster than pyautogui)
+- PIL.ImageGrab for screenshots (faster than mss on Windows)
+- Windows UIA enabled by default for semantic control
+- OCR enabled by default for CLICK_TEXT actions
 
 A `runs/<timestamp>/` folder will be created with JSONL logs and screenshots.
 
@@ -54,11 +67,11 @@ STEP 1
 ## Make targets
 
 ```bash
-make setup   # venv + pip install -r requirements.txt
-make run     # python -m agent.main
-make test    # pytest -q
-make lint    # ruff
-make format  # ruff --fix && black
+make setup   # uv sync (or venv + uv pip install -r requirements.txt)
+make run     # uv run -m agent.main
+make test    # uv run -m pytest -q
+make lint    # uv run ruff check .
+make format  # uv run ruff check . --fix  (Ruff autofix only)
 ```
 
 ---
