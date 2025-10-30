@@ -1,0 +1,11 @@
+rich>=13.7
+PyYAML>=6.0
+mss>=9.0
+Pillow>=10.0
+pyautogui>=0.9
+openai>=1.44
+anthropic>=0.40
+google-generativeai>=0.8
+pytest>=8.0
+ruff>=0.6
+black>=24.8

@@ -1,0 +1,18 @@
+provider: openai          # openai | anthropic | gemini | dummy
+model: gpt-5.1-thinking   # swap without code edits
+temperature: 0.2
+max_output_tokens: 800
+dry_run: true             # set to false for real control
+overlay:
+  enabled: false
+  duration_ms: 250
+loop:
+  max_steps: 50
+  min_interval_ms: 400
+screenshot:
+  width: 1280
+  quality: 70
+throttle_ms: 0
+hotkeys:
+  pause: "ctrl+alt+p"
+  stop: "ctrl+alt+s"
