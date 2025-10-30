@@ -1,16 +1,20 @@
 from __future__ import annotations
 import argparse, os, sys, yaml
-from datetime import datetime
+from datetime import datetime, timezone
+from dotenv import load_dotenv
 from rich.console import Console
 from agent.model import get_adapter
 from agent.loop import Stepper
+
+# Load environment variables from .env file
+load_dotenv()
 
 def load_config(path: str) -> dict:
     with open(path, "r", encoding="utf-8") as fp:
         return yaml.safe_load(fp)
 
 def create_run_dir() -> str:
-    ts = datetime.utcnow().strftime("%Y%m%dT%H%M%S")
+    ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S")
     run_dir = os.path.join("runs", ts)
     os.makedirs(run_dir, exist_ok=True)
     return run_dir

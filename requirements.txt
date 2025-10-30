@@ -6,6 +6,7 @@ pyautogui>=0.9
 openai>=1.44
 anthropic>=0.40
 google-generativeai>=0.8
+python-dotenv>=1.0
 pytest>=8.0
 ruff>=0.6
 black>=24.8

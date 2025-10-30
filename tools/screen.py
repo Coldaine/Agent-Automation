@@ -1,6 +1,6 @@
 from __future__ import annotations
 import base64, io, os
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional, Tuple
 from PIL import Image
 try:
@@ -37,7 +37,7 @@ class Screen:
         return f"data:image/jpeg;base64,{b64}", img
 
     def save_step_image(self, pil_img, step_index: int) -> str:
-        ts = datetime.utcnow().strftime("%Y%m%dT%H%M%S")
+        ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S")
         path = os.path.join(self.run_dir, f"step_{step_index:04d}_{ts}.png")
         pil_img.save(path, format="PNG")
         return path
