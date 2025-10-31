@@ -1,51 +1,43 @@
-#!/usr/bin/env python
-"""
-Run a short live sequence of desktop actions via the agent using the current config.
-Actions are chosen to be safe and observable:
-  1) Move to center and click
-  2) Right-click near center
-  3) Double-click near center
-  4) Type 'hello world' then press enter
-  5) Scroll down, then up
+from __future__ import annotations
+import time
+from tools.input import InputController
 
-Note: This honors config.yaml but forces overlay.always_on.enabled=True for visibility.
-"""
-import os
-import yaml
-from rich.console import Console
-from datetime import datetime, timezone
-from agent.model import get_adapter
-from agent.loop import Stepper
+def run_basic_sequence():
+    """Runs a basic sequence of input actions to test the input controller."""
+    print("Running basic input sequence...")
+    input_controller = InputController(dry_run=False)
 
-CENTER_INSTR = "move mouse to the exact center of the screen and click once, then say done"
-RIGHT_CLICK_CENTER = "right click at the center of the screen, then say done"
-DOUBLE_CLICK_CENTER = "double-click at the center of the screen, then say done"
-TYPE_HELLO = "type 'hello world' then press enter, then say done"
-SCROLL_DOWN = "scroll down the page, then say done"
-SCROLL_UP = "scroll up the page, then say done"
+    # 1. Move to a starting position
+    input_controller.move(100, 100, duration=0.5)
+    print("Moved to (100, 100)")
+    time.sleep(1)
+
+    # 2. Click
+    input_controller.click(200, 200, button="left")
+    print("Clicked at (200, 200)")
+    time.sleep(1)
+
+    # 3. Right-click
+    input_controller.click(300, 300, button="right")
+    print("Right-clicked at (300, 300)")
+    time.sleep(1)
+
+    # 4. Double-click
+    input_controller.click(400, 400, clicks=2)
+    print("Double-clicked at (400, 400)")
+    time.sleep(1)
+
+    # 5. Type
+    input_controller.type_text("Hello, world!", interval=0.1)
+    print("Typed 'Hello, world!'")
+    time.sleep(1)
+
+    # 6. Scroll
+    input_controller.scroll(-300)
+    print("Scrolled down")
+    time.sleep(1)
+
+    print("Basic input sequence complete.")
 
 if __name__ == "__main__":
-    console = Console()
-    with open("config.yaml", "r", encoding="utf-8") as fp:
-        cfg = yaml.safe_load(fp)
-
-    # Make the halo overlay visible for this run only
-    cfg.setdefault("overlay", {})
-    cfg["overlay"].setdefault("always_on", {})
-    cfg["overlay"]["always_on"]["enabled"] = True
-
-    ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S")
-    run_dir = os.path.join("runs", ts)
-    os.makedirs(run_dir, exist_ok=True)
-
-    adapter = get_adapter(cfg.get("provider"), cfg.get("model"), float(cfg.get("temperature",0.2)), int(cfg.get("max_output_tokens",800)))
-    stepper = Stepper(cfg, run_dir, adapter, console)
-
-    try:
-        console.print("[bold green]Live sequence: basic actions[/bold green]")
-        for instr in [CENTER_INSTR, RIGHT_CLICK_CENTER, DOUBLE_CLICK_CENTER, TYPE_HELLO, SCROLL_DOWN, SCROLL_UP]:
-            console.print("[dim]Instruction:[/dim] ", instr)
-            stepper.run_instruction(instr)
-    finally:
-        stepper.close()
-        console.print(f"[dim]Logs at {run_dir}[/dim]")
+    run_basic_sequence()

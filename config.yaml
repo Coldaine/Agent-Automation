@@ -60,3 +60,18 @@ ocr:
   psm: 6
   oem: 3
   region: null             # [left,top,width,height] or null for full screen
+
+verify:
+  wait_ms: 180
+  save_images: true
+  click_delta_threshold: 0.015
+  double_click_delta_threshold: 0.02
+  right_click_delta_threshold: 0.015
+  type_delta_threshold: 0.01
+  scroll_delta_threshold: 0.03
+  drag_delta_threshold: 0.03
+  retry:
+    enabled: true
+    max_retries: 1
+    jitter_px: 3
+    enlarge_factor: 1.5

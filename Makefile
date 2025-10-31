@@ -21,6 +21,15 @@ live-center:
 verify-last:
 	uv run python verify_last_run.py --center-tol 8 --require-verify
 
+run-basic-sequence:
+	uv run python run_sequence_basic.py
+
+run-dry:
+	uv run -m agent.main --config config.yaml --dry_run true
+
+run-live:
+	uv run -m agent.main --config config.yaml --dry_run false
+
 lint:
 	uv run ruff check .
 

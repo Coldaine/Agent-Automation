@@ -335,8 +335,6 @@ def test_process_coords():
         print("\n🎉 All tests passed! The coordinate processing system works correctly.")
     else:
         print(f"\n⚠️  {failed} test(s) failed. Review the coordinate processing logic.")
-    
-    return passed, failed
 
 def test_coordinate_scaling_formulas():
     """Test coordinate scaling formulas with different screen sizes"""

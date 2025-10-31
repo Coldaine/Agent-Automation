@@ -315,6 +315,29 @@ class Stepper:
                 return x_final, y_final, clamped, meta
 
             step_meta = None
+            # Flexible coordinate extractor to tolerate common schemas
+            def _extract_xy(args_ref: Dict[str, Any]):
+                def _is_num(v):
+                    try:
+                        float(v)
+                        return True
+                    except Exception:
+                        return False
+                # 1) Direct x/y
+                if _is_num(args_ref.get("x")) and _is_num(args_ref.get("y")):
+                    return args_ref.get("x"), args_ref.get("y"), "x,y"
+                # 2) Aliases: cx,cy
+                if _is_num(args_ref.get("cx")) and _is_num(args_ref.get("cy")):
+                    return args_ref.get("cx"), args_ref.get("cy"), "cx,cy"
+                # 3) coordinates/point/position as list/tuple
+                for k in ("coordinates", "point", "position", "center", "target", "location"):
+                    v = args_ref.get(k)
+                    if isinstance(v, (list, tuple)) and len(v) == 2 and _is_num(v[0]) and _is_num(v[1]):
+                        return v[0], v[1], k
+                    if isinstance(v, dict) and _is_num(v.get("x")) and _is_num(v.get("y")):
+                        return v.get("x"), v.get("y"), f"{k}.x,y"
+                # 4) bbox handled in process_coords separately
+                return None, None, None
             # Lightweight visual verification helpers
             def _norm_mean_abs_diff(a_img, b_img):
                 try:
@@ -345,7 +368,39 @@ class Stepper:
             def _verify_change(region, before_img):
                 time.sleep(max(0.0, verify_wait_ms/1000.0))
                 after_img = self.screen.capture(region)
-                return _norm_mean_abs_diff(before_img, after_img), after_img
+                delta = _norm_mean_abs_diff(before_img, after_img)
+
+                # Retry logic for verification
+                retry_cfg = verify_cfg.get("retry", {})
+                if delta < float(verify_cfg.get("click_delta_threshold", 0.015)) and retry_cfg.get("enabled", False):
+                    for i in range(retry_cfg.get("max_retries", 1)):
+                        # Optional: small jitter move
+                        if retry_cfg.get("jitter_px", 0) > 0:
+                            jitter = retry_cfg.get("jitter_px", 3)
+                            self.input.move(x_final + jitter, y_final + jitter, duration=0.05)
+                            self.input.move(x_final, y_final, duration=0.05)
+                        
+                        time.sleep(max(0.0, verify_wait_ms/1000.0))
+                        after_img_retry = self.screen.capture(region)
+                        delta_retry = _norm_mean_abs_diff(before_img, after_img_retry)
+                        
+                        if delta_retry >= float(verify_cfg.get("click_delta_threshold", 0.015)):
+                            return delta_retry, after_img_retry, {"attempts": i + 1, "reason": "jitter"}
+                        
+                        # Optional: enlarge region
+                        if retry_cfg.get("enlarge_factor", 1.0) > 1.0:
+                            factor = retry_cfg.get("enlarge_factor", 1.5)
+                            w, h = region[2] * factor, region[3] * factor
+                            cx, cy = region[0] + region[2] // 2, region[1] + region[3] // 2
+                            enlarged_region_img, enlarged_region = _cap_region(cx, cy, w, h)
+                            
+                            time.sleep(max(0.0, verify_wait_ms/1000.0))
+                            after_enlarged_img = self.screen.capture(enlarged_region)
+                            delta_enlarged = _norm_mean_abs_diff(enlarged_region_img, after_enlarged_img)
+                            if delta_enlarged >= float(verify_cfg.get("click_delta_threshold", 0.015)):
+                                return delta_enlarged, after_enlarged_img, {"attempts": i + 1, "reason": "enlarge"}
+
+                return delta, after_img, None
 
             step_verify = None
             # Cursor position helpers for diagnostics
@@ -363,39 +418,45 @@ class Stepper:
                         return None
 
             if act == "MOVE":
-                x_raw, y_raw = args.get("x", 0), args.get("y", 0)
-                coord = args.get("coordinates") or args.get("point") or args.get("position")
-                if isinstance(coord, (list, tuple)) and len(coord) == 2:
-                    x_raw, y_raw = coord[0], coord[1]
+                x_raw, y_raw, src = _extract_xy(args)
+                if x_raw is None or y_raw is None:
+                    # Default to center if not provided
+                    x_raw, y_raw, src = actual_width // 2, actual_height // 2, "default:center"
                 x_final, y_final, _clamped, step_meta = process_coords(x_raw, y_raw, args)
                 cur_before = _cursor_pos()
-                observation = self.input.move(x_final, y_final, float(args.get("duration",0.0)))
+                observation = self.input.move(x_final, y_final, float(args.get("duration", 0.0)))
                 cur_after = _cursor_pos()
-                step_meta = {**(step_meta or {}), "cursor": {"before": cur_before, "after": cur_after}}
+                step_meta = {**(step_meta or {}), "cursor": {"before": cur_before, "after": cur_after}, "coord_source": src}
             elif act == "CLICK":
-                x_raw, y_raw = args.get("x"), args.get("y")
-                coord = args.get("coordinates") or args.get("point") or args.get("position")
-                if isinstance(coord, (list, tuple)) and len(coord) == 2:
-                    x_raw, y_raw = coord[0], coord[1]
+                x_raw, y_raw, src = _extract_xy(args)
                 x_final, y_final, _clamped, step_meta = process_coords(x_raw, y_raw, args)
                 cur_before = None
                 cur_after = None
-                # Capture small region before click for verification or guard missing coords
                 if x_final is None or y_final is None:
-                    observation = "missing coordinates; click skipped"
+                    observation = (
+                        f"missing coordinates; click skipped (args keys={list((args or {}).keys())}; "
+                        f"accepted: x,y | coordinates/point/position [x,y] or {{x,y}} | bbox [x1,y1,x2,y2])"
+                    )
                     region = (0, 0, 1, 1)
                     before_img = self.screen.capture((0, 0, 1, 1))
                 else:
                     before_img, region = _cap_region(x_final, y_final, 140, 140)
                     cur_before = _cursor_pos()
-                    observation = self.input.click(x_final, y_final, button=args.get("button","left"),clicks=int(args.get("clicks",1)),interval=float(args.get("interval",0.1)))
+                    observation = self.input.click(
+                        x_final,
+                        y_final,
+                        button=args.get("button", "left"),
+                        clicks=int(args.get("clicks", 1)),
+                        interval=float(args.get("interval", 0.1)),
+                    )
                     cur_after = _cursor_pos()
-                delta, after_img = _verify_change(region, before_img)
+                delta, after_img, retry_meta = _verify_change(region, before_img)
                 if overlay_enabled and x_final is not None and y_final is not None:
                     overlay.show_crosshair(int(x_final), int(y_final), overlay_ms)
                 pass_threshold = float(verify_cfg.get("click_delta_threshold", 0.015))
                 step_verify = {"region": list(region), "delta": delta, "pass": bool(delta >= pass_threshold)}
-                # Optional: save before/after crops for audit
+                if retry_meta:
+                    step_verify["retry"] = retry_meta
                 try:
                     if bool(verify_cfg.get("save_images", True)):
                         before_path = os.path.join(self.run_dir, f"verify_step_{idx:04d}_before.png")
@@ -406,30 +467,31 @@ class Stepper:
                 except Exception:
                     pass
                 # Attach cursor diagnostics if available
-                # Attach cursor diagnostics if available
                 try:
                     if cur_before is not None or cur_after is not None:
-                        step_meta = {**(step_meta or {}), "cursor": {"before": cur_before, "after": cur_after}}
+                        step_meta = {**(step_meta or {}), "cursor": {"before": cur_before, "after": cur_after}, "coord_source": src}
                 except Exception:
                     pass
             elif act == "DOUBLE_CLICK":
-                x_raw, y_raw = args.get("x"), args.get("y")
-                coord = args.get("coordinates") or args.get("point") or args.get("position")
-                if isinstance(coord, (list, tuple)) and len(coord) == 2:
-                    x_raw, y_raw = coord[0], coord[1]
+                x_raw, y_raw, src = _extract_xy(args)
                 x_final, y_final, _clamped, step_meta = process_coords(x_raw, y_raw, args)
                 if x_final is None or y_final is None:
-                    observation = "missing coordinates; double-click skipped"
+                    observation = (
+                        f"missing coordinates; double-click skipped (args keys={list((args or {}).keys())}; "
+                        f"accepted: x,y | coordinates/point/position [x,y] or {{x,y}} | bbox [x1,y1,x2,y2])"
+                    )
                     region = (0, 0, 1, 1)
                     before_img = self.screen.capture((0, 0, 1, 1))
                 else:
                     before_img, region = _cap_region(x_final, y_final, 140, 140)
-                    observation = self.input.click(x_final, y_final, button=args.get("button","left"),clicks=2,interval=0.1)
-                delta, after_img = _verify_change(region, before_img)
+                    observation = self.input.click(x_final, y_final, button=args.get("button", "left"), clicks=2, interval=0.1)
+                delta, after_img, retry_meta = _verify_change(region, before_img)
                 if overlay_enabled and x_final is not None and y_final is not None:
                     overlay.show_crosshair(int(x_final), int(y_final), overlay_ms)
                 pass_threshold = float(verify_cfg.get("double_click_delta_threshold", 0.02))
                 step_verify = {"region": list(region), "delta": delta, "pass": bool(delta >= pass_threshold)}
+                if retry_meta:
+                    step_verify["retry"] = retry_meta
                 try:
                     if bool(verify_cfg.get("save_images", True)):
                         before_path = os.path.join(self.run_dir, f"verify_step_{idx:04d}_before.png")
@@ -440,23 +502,25 @@ class Stepper:
                 except Exception:
                     pass
             elif act == "RIGHT_CLICK":
-                x_raw, y_raw = args.get("x"), args.get("y")
-                coord = args.get("coordinates") or args.get("point") or args.get("position")
-                if isinstance(coord, (list, tuple)) and len(coord) == 2:
-                    x_raw, y_raw = coord[0], coord[1]
+                x_raw, y_raw, src = _extract_xy(args)
                 x_final, y_final, _clamped, step_meta = process_coords(x_raw, y_raw, args)
                 if x_final is None or y_final is None:
-                    observation = "missing coordinates; right-click skipped"
+                    observation = (
+                        f"missing coordinates; right-click skipped (args keys={list((args or {}).keys())}; "
+                        f"accepted: x,y | coordinates/point/position [x,y] or {{x,y}} | bbox [x1,y1,x2,y2])"
+                    )
                     region = (0, 0, 1, 1)
                     before_img = self.screen.capture((0, 0, 1, 1))
                 else:
                     before_img, region = _cap_region(x_final, y_final, 140, 140)
-                    observation = self.input.click(x_final, y_final, button="right",clicks=1)
-                delta, after_img = _verify_change(region, before_img)
+                    observation = self.input.click(x_final, y_final, button="right", clicks=1)
+                delta, after_img, retry_meta = _verify_change(region, before_img)
                 if overlay_enabled and x_final is not None and y_final is not None:
                     overlay.show_crosshair(int(x_final), int(y_final), overlay_ms)
                 pass_threshold = float(verify_cfg.get("right_click_delta_threshold", 0.015))
                 step_verify = {"region": list(region), "delta": delta, "pass": bool(delta >= pass_threshold)}
+                if retry_meta:
+                    step_verify["retry"] = retry_meta
                 try:
                     if bool(verify_cfg.get("save_images", True)):
                         before_path = os.path.join(self.run_dir, f"verify_step_{idx:04d}_before.png")
@@ -471,9 +535,11 @@ class Stepper:
                 cx, cy = actual_width // 2, actual_height // 2
                 before_img, region = _cap_region(cx, cy, 360, 160)
                 observation = self.input.type_text(str(args.get("text","")), float(args.get("interval",0.02)))
-                delta, after_img = _verify_change(region, before_img)
+                delta, after_img, retry_meta = _verify_change(region, before_img)
                 pass_threshold = float(verify_cfg.get("type_delta_threshold", 0.01))
                 step_verify = {"region": list(region), "delta": delta, "pass": bool(delta >= pass_threshold)}
+                if retry_meta:
+                    step_verify["retry"] = retry_meta
                 try:
                     if bool(verify_cfg.get("save_images", True)):
                         before_path = os.path.join(self.run_dir, f"verify_step_{idx:04d}_before.png")
@@ -490,9 +556,11 @@ class Stepper:
                 cx, cy = actual_width // 2, actual_height // 2
                 before_img, region = _cap_region(cx, cy, min(600, actual_width), min(400, actual_height))
                 observation = self.input.scroll(int(args.get("amount", -600)))
-                delta, after_img = _verify_change(region, before_img)
+                delta, after_img, retry_meta = _verify_change(region, before_img)
                 pass_threshold = float(verify_cfg.get("scroll_delta_threshold", 0.03))
                 step_verify = {"region": list(region), "delta": delta, "pass": bool(delta >= pass_threshold)}
+                if retry_meta:
+                    step_verify["retry"] = retry_meta
                 try:
                     if bool(verify_cfg.get("save_images", True)):
                         before_path = os.path.join(self.run_dir, f"verify_step_{idx:04d}_before.png")
@@ -515,9 +583,11 @@ class Stepper:
                 else:
                     before_img, region = _cap_region(x_final, y_final, 200, 200)
                     observation = self.input.drag(x_final, y_final, float(args.get("duration",0.2)))
-                delta, after_img = _verify_change(region, before_img)
+                delta, after_img, retry_meta = _verify_change(region, before_img)
                 pass_threshold = float(verify_cfg.get("drag_delta_threshold", 0.03))
                 step_verify = {"region": list(region), "delta": delta, "pass": bool(delta >= pass_threshold)}
+                if retry_meta:
+                    step_verify["retry"] = retry_meta
                 try:
                     if bool(verify_cfg.get("save_images", True)):
                         before_path = os.path.join(self.run_dir, f"verify_step_{idx:04d}_before.png")

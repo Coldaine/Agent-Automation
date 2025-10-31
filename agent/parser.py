@@ -81,6 +81,17 @@ def validate_payload(d: Dict[str, Any], *, ocr_enabled: bool) -> Dict[str, Any]:
     if not ocr_enabled and na == "CLICK_TEXT":
         raise ValueError("CLICK_TEXT not allowed when OCR is disabled")
 
+    # Pointer actions must have usable coordinates
+    if na in {"MOVE", "CLICK", "DOUBLE_CLICK", "RIGHT_CLICK", "DRAG"}:
+        args = d.get("args", {})
+        has_coords = any(k in args for k in ["x", "y", "cx", "cy", "bbox", "coordinates", "point", "position", "center", "target", "location"])
+        if not has_coords:
+            raise ValueError(
+                f"Pointer action '{na}' requires usable coordinates. "
+                f"Accepted args keys: x,y | cx,cy | bbox:[x1,y1,x2,y2] | coordinates/point/position/center/target/location:[x,y] or {{'x':x,'y':y}}. "
+                f"Found args: {list(args.keys())}"
+            )
+
     return d
 
 
