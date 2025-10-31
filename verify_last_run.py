@@ -12,6 +12,7 @@ import math
 import os
 import sys
 from typing import Any, Dict, Optional, Tuple
+import argparse
 
 from rich.console import Console
 from rich.table import Table
@@ -75,8 +76,13 @@ def _center_distance(meta: Dict[str, Any]) -> Optional[Tuple[float, float, float
 
 
 def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("run_dir", nargs="?", help="Run directory (default: latest)")
+    ap.add_argument("--center-tol", type=float, default=8.0, help="Max px from center to consider centered")
+    ap.add_argument("--require-verify", action="store_true", help="Fail if any available verify.pass is False")
+    args = ap.parse_args()
     console = Console()
-    run_dir = sys.argv[1] if len(sys.argv) > 1 else _latest_run_dir()
+    run_dir = args.run_dir or _latest_run_dir()
     if not run_dir:
         console.print("[red]No runs found.[/red]")
         sys.exit(1)
@@ -92,6 +98,7 @@ def main():
     table.add_column("center_dist(px)")
     table.add_column("verify.delta")
     table.add_column("verify.pass")
+    table.add_column("cursor(before→after)")
 
     all_pass = True
     for s in steps:
@@ -103,6 +110,10 @@ def main():
         center_dist = f"{dist[2]:.1f}" if dist else ""
         vdelta = verify.get("delta")
         vpass = verify.get("pass")
+        cursor = (meta.get("cursor") or {})
+        cur_str = ""
+        if cursor:
+            cur_str = f"{cursor.get('before')}→{cursor.get('after')}"
         table.add_row(
             str(s.get("step_index")),
             str(s.get("next_action")),
@@ -110,10 +121,15 @@ def main():
             center_dist,
             f"{vdelta:.4f}" if isinstance(vdelta, (int, float)) else "",
             str(vpass) if vpass is not None else "",
+            cur_str,
         )
         # Consider a step verified if verify.pass is True when present; otherwise ignore
-        if vpass is False:
+        if args.require_verify and vpass is False:
             all_pass = False
+        # Center tolerance check for MOVE/CLICK with coords
+        if s.get("next_action") in ("MOVE", "CLICK") and dist is not None:
+            if dist[2] > float(args.center_tol):
+                all_pass = False
 
     console.print(table)
 

@@ -15,6 +15,12 @@ test:
 smoke:
 	uv run -m pytest -q -k action_contract
 
+live-center:
+	uv run python run_once_center.py
+
+verify-last:
+	uv run python verify_last_run.py --center-tol 8 --require-verify
+
 lint:
 	uv run ruff check .
 
