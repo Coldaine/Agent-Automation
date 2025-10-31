@@ -30,8 +30,8 @@ temperature: 0.2
 max_output_tokens: 800
 dry_run: false            # LIVE MODE - real clicks and typing!
 overlay:
-  enabled: false
-  duration_ms: 250
+  enabled: true            # ENABLED for visual debugging
+  duration_ms: 1000         # Show crosshair for 1 second
   always_on:
     enabled: false
     radius: 18

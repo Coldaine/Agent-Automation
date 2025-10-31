@@ -97,10 +97,38 @@ See `config.yaml`:
 ---
 
 ## Roadmap
-- Windows UIA integration (pywinauto) for semantic control (optional, Windows only).
-- Cursor semantic grounding (OCR + small vision model) for robust element targeting.
-- On-device small vision model fallback for privacy/offline smoke tests.
-- Task graphs (macro recording + replay with parameterization).
+
+**See [`IMPLEMENTATION-ROADMAP.md`](./IMPLEMENTATION-ROADMAP.md) for the complete master plan.**
+
+**Current Focus (Phase 1)**:
+- Provider-specific testing and validation
+- Configuration validation at startup
+- Enhanced error handling and retry strategies
+- Comprehensive test coverage (unit, integration, live API)
+
+**Phase 2** (Windows Advanced Features):
+- Windows UIA integration (pywinauto) for semantic control — code written, needs testing
+- OCR-assisted targeting (CLICK_TEXT action) — code written, needs testing
+- Enhanced overlay visualizations
+
+**Future**:
+- Cross-platform improvements (macOS AX, Linux AT-SPI)
+- Screenshot optimization and caching
+- Task graphs (macro recording + replay with parameterization)
+- Multi-provider consensus and self-correction
+
+---
+
+## Documentation
+
+**Core Documentation**:
+- [`/docs/visions.md`](./docs/visions.md) — Project vision and ANCHORS compliance
+- [`/docs/architecture.md`](./docs/architecture.md) — System architecture and dataflow
+- [`/docs/provider-backends.md`](./docs/provider-backends.md) — **NEW**: Provider-specific requirements and quirks
+- [`IMPLEMENTATION-ROADMAP.md`](./IMPLEMENTATION-ROADMAP.md) — **NEW**: Complete implementation plan
+- [`/docs/testing.md`](./docs/testing.md) — Testing procedures and sample output
+- [`/docs/dependencies.md`](./docs/dependencies.md) — Setup and system requirements
+- [`/docs/changelog.md`](./docs/changelog.md) — Version history
 
 ---
 

@@ -1,12 +1,13 @@
 #!/usr/bin/env python
 """Real test: Open Chrome and navigate to Gmail with VISION model.
 
-Adds extensive logging to understand what's happening at each stage:
+Adds extensive logging and fail-fast behavior to understand what's happening at each stage:
 - Environment + config summary (provider, model, base URL)
 - Preflight API call (smoke test) with timing
 - Live tail of steps.jsonl (plan/action/args/say/observation)
 - Screenshot existence checks per step
 - Raw model outputs length and parse status
+ - Early exit on critical errors (bad base URL, auth errors, timeout, no steps)
 """
 import sys
 import os
@@ -139,6 +140,47 @@ def tail_steps_jsonl(path: str, logger: logging.Logger, stop_event: threading.Ev
         time.sleep(0.4)
 
 
+def fatal(logger: logging.Logger, console: Console, message: str, code: int = 1):
+    logger.error("FATAL: %s", message)
+    try:
+        console.print(f"\n❌ FATAL: {message}")
+    except Exception:
+        pass
+    # Ensure logs are flushed
+    for h in list(logger.handlers):
+        try:
+            h.flush()
+        except Exception:
+            pass
+    sys.exit(code)
+
+
+def require(logger: logging.Logger, console: Console, condition: bool, message: str, code: int = 2):
+    if not condition:
+        fatal(logger, console, message, code)
+
+
+def wait_for_first_step(steps_path: str, timeout_s: float, logger: logging.Logger) -> bool:
+    """Return True if at least one valid JSONL step appears within timeout."""
+    t0 = time.time()
+    while time.time() - t0 < timeout_s:
+        try:
+            if os.path.exists(steps_path):
+                with open(steps_path, "r", encoding="utf-8") as fp:
+                    for line in fp:
+                        try:
+                            j = json.loads(line)
+                            if isinstance(j, dict) and j.get("step_index"):
+                                return True
+                        except Exception:
+                            pass
+        except Exception:
+            pass
+        time.sleep(0.25)
+    logger.warning("No steps detected within %.1fs", timeout_s)
+    return False
+
+
 def main():
     # Load config
     with open("config.yaml") as f:
@@ -155,16 +197,30 @@ def main():
     logger.info("Python: %s | Executable: %s", platform.python_version(), sys.executable)
     logger.info("OS: %s %s | CWD: %s", platform.system(), platform.release(), os.getcwd())
     logger.info("VENV: %s | .venv present: %s", os.environ.get("VIRTUAL_ENV", "<n/a>"), os.path.exists(os.path.join(".venv", "Scripts", "python.exe")))
-    logger.info("Provider: %s | Model: %s | dry_run: %s", cfg.get("provider"), cfg.get("model"), cfg.get("dry_run"))
-    base_url = resolve_base_url(cfg.get("provider"))
+    provider = cfg.get("provider")
+    logger.info("Provider: %s | Model: %s | dry_run: %s", provider, cfg.get("model"), cfg.get("dry_run"))
+    base_url = resolve_base_url(provider)
     logger.info("Resolved base URL: %s", base_url)
-    # Masked keys presence
-    logger.info("Keys: OPENAI=%s | ZHIPU=%s | ANTHROPIC=%s | GOOGLE=%s",
-                _mask(os.environ.get("OPENAI_API_KEY")),
-                _mask(os.environ.get("ZHIPU_API_KEY")),
-                _mask(os.environ.get("ANTHROPIC_API_KEY")),
-                _mask(os.environ.get("GOOGLE_API_KEY")))
+
+    # Log only the API key for the active provider
+    key_map = {
+        "openai": ("OPENAI_API_KEY", os.environ.get("OPENAI_API_KEY")),
+        "zhipu": ("ZHIPU_API_KEY", os.environ.get("ZHIPU_API_KEY")),
+        "anthropic": ("ANTHROPIC_API_KEY", os.environ.get("ANTHROPIC_API_KEY")),
+        "gemini": ("GOOGLE_API_KEY", os.environ.get("GOOGLE_API_KEY")),
+    }
+    if provider in key_map:
+        key_name, key_val = key_map[provider]
+        logger.info("Active provider API key: %s=%s", key_name, _mask(key_val))
+
     logger.info("Run dir: %s", run_dir)
+
+    # Validate critical provider settings (fail-fast)
+    model = cfg.get("model")
+    console = Console()
+    if provider == "zhipu":
+        require(logger, console, model == "glm-4.5v", "Zhipu must use model 'glm-4.5v' (vision)")
+        require(logger, console, "/api/coding/paas/v4" in (base_url or ""), "Zhipu base URL must contain /api/coding/paas/v4")
 
     # Create model adapter + proxy for extra logs
     adapter = get_adapter(
@@ -175,10 +231,13 @@ def main():
     )
     ladapter = LoggingAdapterProxy(adapter, logger)
 
-    # Console for Stepper UI
-    console = Console()
-
     # Stepper
+    # Reduce max_steps for tests if very large (fail faster)
+    try:
+        if int(cfg.get("loop", {}).get("max_steps", 50)) > 50:
+            cfg["loop"]["max_steps"] = 50
+    except Exception:
+        pass
     stepper = Stepper(
         cfg=cfg,
         run_dir=run_dir,
@@ -191,8 +250,8 @@ def main():
     tail_thread = threading.Thread(target=tail_steps_jsonl, args=(os.path.join(run_dir, "steps.jsonl"), logger, stop_event), daemon=True)
     tail_thread.start()
 
-    # Preflight (non-fatal): quick JSON-only instruction without image
     try:
+        # Preflight (FATAL ON FAILURE): quick JSON-only instruction without image
         logger.info("Preflight: calling adapter.step without image to verify API connectivity...")
         pre_raw = ladapter.step(
             instruction=("Return ONLY this exact JSON: {\"plan\":\"preflight\",\"say\":null,\"next_action\":\"NONE\",\"args\":{},\"done\":true}"),
@@ -202,26 +261,42 @@ def main():
         )
         pr = pre_raw if isinstance(pre_raw, str) else json.dumps(pre_raw)
         logger.info("Preflight OK | raw_len=%d | preview=%s", len(pr), pr[:400])
-    except Exception as e:
-        logger.warning("Preflight FAILED: %s (continuing)", e)
 
-    # Run instruction
-    instruction = "Open Chrome browser and navigate to gmail.com"
-    logger.info("Instruction: %s", instruction)
-    console.print(f"\n🚀 Instruction: {instruction}\n")
+        # Run instruction
+        instruction = "Open Chrome browser and navigate to gmail.com"
+        logger.info("Instruction: %s", instruction)
+        console.print(f"\n🚀 Instruction: {instruction}\n")
 
-    try:
-        t0 = time.time()
-        stepper.run_instruction(instruction)
-        dt = (time.time() - t0)
-        logger.info("Stepper completed in %.1fs. See %s", dt, run_dir)
+        # Start the run in a thread to enforce a hard timeout
+        run_errors: list[str] = []
+
+        def _runner():
+            try:
+                t0 = time.time()
+                stepper.run_instruction(instruction)
+                dt = (time.time() - t0)
+                logger.info("Stepper completed in %.1fs. See %s", dt, run_dir)
+            except Exception as e:
+                run_errors.append(str(e))
+
+        runner = threading.Thread(target=_runner, daemon=True)
+        runner.start()
+
+        # Ensure the first step appears quickly
+        steps_path = os.path.join(run_dir, "steps.jsonl")
+        if not wait_for_first_step(steps_path, timeout_s=15, logger=logger):
+            raise RuntimeError("No steps produced within 15s (likely model/vision/config issue).")
+
+        # Enforce overall timeout for the test run
+        TEST_TIMEOUT_S = float(os.environ.get("REAL_TEST_TIMEOUT_S", "180"))
+        runner.join(TEST_TIMEOUT_S)
+        if runner.is_alive():
+            raise TimeoutError(f"Test exceeded timeout of {TEST_TIMEOUT_S}s (hung).")
+        if run_errors:
+            raise RuntimeError(f"Run failed: {run_errors[0]}")
         console.print("\n✅ Test complete! Check the runs/ directory for logs and screenshots.")
-    except KeyboardInterrupt:
-        logger.warning("Interrupted by user")
-        console.print("\n⚠️  Interrupted by user")
     except Exception as e:
-        logger.exception("Run failed: %s", e)
-        console.print(f"\n❌ Error: {e}")
+        fatal(logger, console, f"Run failed: {e}")
     finally:
         try:
             stop_event.set()

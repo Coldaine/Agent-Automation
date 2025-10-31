@@ -13,8 +13,17 @@ VALID_ACTIONS = {
 }
 
 def parse_structured_output(raw_text: str) -> Tuple[Dict[str, Any], str]:
-    """Accepts either pure JSON or markdown fenced JSON. Returns (payload, err)."""
+    """Accepts pure JSON, markdown fenced JSON, or box-wrapped JSON. Returns (payload, err)."""
     txt = raw_text.strip()
+
+    # Handle <|begin_of_box|>...<|end_of_box|> format from Zhipu models
+    if "<|begin_of_box|>" in txt and "<|end_of_box|>" in txt:
+        start = txt.find("<|begin_of_box|>") + len("<|begin_of_box|>")
+        end = txt.find("<|end_of_box|>")
+        if end > start:
+            txt = txt[start:end].strip()
+
+    # Handle markdown code fences
     if "```" in txt:
         start = txt.find("```")
         end = txt.find("```", start + 3)

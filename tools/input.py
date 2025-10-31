@@ -18,14 +18,15 @@ class InputController:
                     self._win32 = (win32api, win32con)
                 except Exception:
                     pass
-            
-            if self._win32 is None:
-                try:
-                    import pyautogui as pg
-                    pg.FAILSAFE = True
-                    pg.PAUSE = 0
-                    self._pg = pg
-                except Exception as e:
+
+            # Always initialize pyautogui for typing and hotkeys (win32 SendInput is complex)
+            try:
+                import pyautogui as pg
+                pg.FAILSAFE = True
+                pg.PAUSE = 0
+                self._pg = pg
+            except Exception as e:
+                if self._win32 is None:
                     raise RuntimeError(f"Input library not available: {e}")
 
     def _obs(self, text: str) -> str:
