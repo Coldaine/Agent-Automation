@@ -67,20 +67,10 @@ class Stepper:
 
         say_to_user("Got it. Working step-by-step.")
 
-        # Get actual screen size for coordinate scaling
-        actual_screen_img = self.screen.capture()  # Full resolution screenshot
-        actual_width = actual_screen_img.width
-        actual_height = actual_screen_img.height
-        say_to_user(f"Screen: {actual_width}x{actual_height}, Screenshot sent to model: {shot_w}px wide")
-
         done = False
         for idx in range(1, max_steps + 1):
             img_b64, pil_img = self.screen.capture_and_encode(width=shot_w, quality=shot_q)
 
-            # Calculate coordinate scale factor (screenshot coords → actual screen coords)
-            # pil_img is the resized image sent to model
-            scale_x = actual_width / pil_img.width
-            scale_y = actual_height / pil_img.height
             raw = self.model.step(instruction, self.last_observation, [s.to_json() for s in self.steps], img_b64)
             payload, err = parse_structured_output(raw if isinstance(raw, str) else json.dumps(raw))
             if err:
@@ -89,34 +79,55 @@ class Stepper:
             args = payload["args"] or {}
             observation = ""
 
-            # Helper to scale coordinates from screenshot to actual screen
-            def scale_coord(x, y):
-                if x is None or y is None:
-                    return x, y
-                return int(x * scale_x), int(y * scale_y)
-
             if act == "MOVE":
                 x_raw, y_raw = args.get("x", 0), args.get("y", 0)
-                x_scaled, y_scaled = scale_coord(x_raw, y_raw)
-                observation = self.input.move(x_scaled, y_scaled, float(args.get("duration",0.0)))
+                observation = self.input.move(x_raw, y_raw, float(args.get("duration",0.0)))
+
+            # Helper: clamp to the valid screen rectangle
+            def clamp_to_screen(x, y):
+                if x is None or y is None:
+                    return x, y, False
+                xi = int(x)
+                yi = int(y)
+                clamped_x = max(0, min(actual_width - 1, xi))
+                clamped_y = max(0, min(actual_height - 1, yi))
+                clamped = (clamped_x != xi) or (clamped_y != yi)
+                return clamped_x, clamped_y, clamped
+
+            # Helper: process coordinates from the model.
+            # Default: treat coordinates as ABSOLUTE screen coordinates (no scaling).
+            # We still compute reference scale and include telemetry (`meta`) for debugging.
+            def process_coords(x_raw, y_raw):
+                x_final, y_final, clamped = clamp_to_screen(x_raw, y_raw)
+                meta = {
+                    "screen": {"width": actual_width, "height": actual_height},
+                    "image": {"width": pil_img.width, "height": pil_img.height},
+                    "coords": {"raw": [x_raw, y_raw], "final": [x_final, y_final]},
+                    "scaling": {"mode": "none", "scale_x": scale_x, "scale_y": scale_y, "applied": False},
+                    "clamped": clamped,
+                }
+                return x_final, y_final, clamped, meta
+
+            step_meta = None
+            if act == "MOVE":
+                x_raw, y_raw = args.get("x", 0), args.get("y", 0)
+                x_final, y_final, _clamped, step_meta = process_coords(x_raw, y_raw)
+                observation = self.input.move(x_final, y_final, float(args.get("duration",0.0)))
             elif act == "CLICK":
                 x_raw, y_raw = args.get("x"), args.get("y")
-                x_scaled, y_scaled = scale_coord(x_raw, y_raw)
-                observation = self.input.click(x_scaled, y_scaled, button=args.get("button","left"),clicks=int(args.get("clicks",1)),interval=float(args.get("interval",0.1)))
-                if overlay_enabled and x_scaled is not None and y_scaled is not None:
-                    overlay.show_crosshair(int(x_scaled), int(y_scaled), overlay_ms)
+                observation = self.input.click(x_raw, y_raw, button=args.get("button","left"),clicks=int(args.get("clicks",1)),interval=float(args.get("interval",0.1)))
+                if overlay_enabled and x_raw is not None and y_raw is not None:
+                    overlay.show_crosshair(int(x_raw), int(y_raw), overlay_ms)
             elif act == "DOUBLE_CLICK":
                 x_raw, y_raw = args.get("x"), args.get("y")
-                x_scaled, y_scaled = scale_coord(x_raw, y_raw)
-                observation = self.input.click(x_scaled, y_scaled, button=args.get("button","left"),clicks=2,interval=0.1)
-                if overlay_enabled and x_scaled is not None and y_scaled is not None:
-                    overlay.show_crosshair(int(x_scaled), int(y_scaled), overlay_ms)
+                observation = self.input.click(x_raw, y_raw, button=args.get("button","left"),clicks=2,interval=0.1)
+                if overlay_enabled and x_raw is not None and y_raw is not None:
+                    overlay.show_crosshair(int(x_raw), int(y_raw), overlay_ms)
             elif act == "RIGHT_CLICK":
                 x_raw, y_raw = args.get("x"), args.get("y")
-                x_scaled, y_scaled = scale_coord(x_raw, y_raw)
-                observation = self.input.click(x_scaled, y_scaled, button="right",clicks=1)
-                if overlay_enabled and x_scaled is not None and y_scaled is not None:
-                    overlay.show_crosshair(int(x_scaled), int(y_scaled), overlay_ms)
+                observation = self.input.click(x_raw, y_raw, button="right",clicks=1)
+                if overlay_enabled and x_raw is not None and y_raw is not None:
+                    overlay.show_crosshair(int(x_raw), int(y_raw), overlay_ms)
             elif act == "TYPE":
                 observation = self.input.type_text(str(args.get("text","")), float(args.get("interval",0.02)))
             elif act == "HOTKEY":
@@ -125,8 +136,7 @@ class Stepper:
                 observation = self.input.scroll(int(args.get("amount", -600)))
             elif act == "DRAG":
                 x_raw, y_raw = args.get("x", 0), args.get("y", 0)
-                x_scaled, y_scaled = scale_coord(x_raw, y_raw)
-                observation = self.input.drag(x_scaled, y_scaled, float(args.get("duration",0.2)))
+                observation = self.input.drag(x_raw, y_raw, float(args.get("duration",0.2)))
             elif act == "WAIT":
                 observation = self.input.wait(float(args.get("seconds",0.5)))
             # Phase 2 actions disabled - need implementation fixes
@@ -207,6 +217,7 @@ class Stepper:
                 say=payload.get("say"),
                 observation=observation,
                 screenshot_path=shot_path,
+                meta=step_meta,
             )
             self.steps.append(step)
             self.last_observation = observation
