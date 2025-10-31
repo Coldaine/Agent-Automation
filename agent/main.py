@@ -4,6 +4,7 @@ import argparse, os, sys, yaml
 from datetime import datetime, timezone
 from dotenv import load_dotenv
 from rich.console import Console
+from observability.logging_config import configure_logging
 from agent.model import get_adapter
 from agent.loop import Stepper
 
@@ -21,6 +22,7 @@ def create_run_dir() -> str:
     return run_dir
 
 def main():
+    configure_logging()
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", default="config.yaml")
     args = parser.parse_args()
