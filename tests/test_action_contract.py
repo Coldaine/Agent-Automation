@@ -33,7 +33,9 @@ def test_pointer_action_requires_coords():
     '{"center": {"x": 100, "y": 200}}',
     '{"target": [100, 200]}',
     '{"location": [100, 200]}',
-    '{"bbox": [100, 200, 300, 400]}'
+    '{"bbox": [100, 200, 300, 400]}',
+    '{"x": 500, "y": 500, "coord_system": "normalized_1000"}',
+    '{"x": 0.5, "y": 0.5, "coord_system": "unit_normalized"}'
 ])
 def test_pointer_action_accepts_valid_coords(coord_arg):
     for action in ["MOVE", "CLICK", "DOUBLE_CLICK", "RIGHT_CLICK", "DRAG"]:

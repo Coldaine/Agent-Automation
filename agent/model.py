@@ -241,7 +241,58 @@ class ZhipuAdapter(BaseModelAdapter):
                     "usage": usage,
                     "message_preview": (m.content if isinstance(m.content, str) else str(m.content))[:800],
                 })
-                return m.content
+                # If the model hit the length limit or appears truncated, reissue once with a compact JSON constraint
+                try:
+                    content_str = m.content if isinstance(m.content, str) else str(m.content)
+                except Exception:
+                    content_str = ""
+                is_truncated = (finish_reason == "length") or (content_str and not content_str.strip().endswith("}"))
+                if is_truncated and attempt == 0:
+                    compact_system = (
+                        system_prompt
+                        + "\nReturn a COMPACT JSON object: no markdown, no prose, no newlines, no spaces after colons/commas. "
+                        + "Only keys: plan,say,next_action,args,done. Keep plan<=40 chars. Use integers for coordinates."
+                    )
+                    compact_messages = [
+                        {"role": "system", "content": compact_system},
+                        {"role": "user", "content": user_content},
+                    ]
+                    if image_b64_jpeg:
+                        compact_messages[1]["content"] = [
+                            {"type": "text", "text": user_content},
+                            {"type": "image_url", "image_url": {"url": image_b64_jpeg}},
+                        ]
+                    # Slightly increase max tokens but keep bounded
+                    compact_max = min(int(self.max_output_tokens) + 512, 2048)
+                    compact_temp = max(0.0, float(self.temperature) - 0.1)
+                    t1 = _time.perf_counter()
+                    resp2 = self.client.chat.completions.create(
+                        model=self.model,
+                        temperature=compact_temp,
+                        messages=compact_messages,
+                        max_tokens=compact_max,
+                        timeout=30,
+                    )
+                    dt_ms2 = int((_time.perf_counter() - t1) * 1000)
+                    m2 = resp2.choices[0].message
+                    fr2 = None
+                    try:
+                        fr2 = getattr(resp2.choices[0], "finish_reason", None)
+                    except Exception:
+                        fr2 = None
+                    self._log_provider({
+                        "type": "provider_resp_compact_retry",
+                        "provider": "zhipu",
+                        "seq": self._call_seq,
+                        "attempt": attempt + 1,
+                        "duration_ms": dt_ms2,
+                        "finish_reason": fr2,
+                        "max_tokens": compact_max,
+                        "temperature": compact_temp,
+                        "message_preview": (m2.content if isinstance(m2.content, str) else str(m2.content))[:800],
+                    })
+                    return m2.content
+                return content_str
             except Exception:  # network/timeouts/rate limits
                 err_txt = _tb.format_exc(limit=2)
                 self._log_provider({

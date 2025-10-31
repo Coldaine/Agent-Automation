@@ -27,6 +27,8 @@ WRAPPER_PATTERNS = [
     r"^<\|begin_of_box\|>\s*", r"\s*<\|end_of_box\|>$",  # GLM wrapper
     r"^```(?:json)?\s*", r"\s*```$",                      # fences
     r"^\s*(?:Here is the JSON:?|Output:?|Result:?)[\s\n]*",  # prefaces
+    r"^\s*Here is the JSON output:\s*",
+    r"^\s*Sure, here is the JSON:\s*",
 ]
 ZERO_WIDTH = r"[\u200B-\u200D\uFEFF]"  # BOM/zero-width chars
 
@@ -38,7 +40,9 @@ def clean_model_text(s: str) -> str:
         s = re.sub(pat, "", s, flags=re.IGNORECASE | re.DOTALL)
     # Trim to first JSON object if extra prose remains
     m = re.search(r"\{.*\}", s, flags=re.DOTALL)
-    return m.group(0) if m else s.strip()
+    if not m:
+        raise ValueError("No JSON object found in the model output")
+    return m.group(0)
 
 
 def _validate_schema_root(d: Any) -> Dict[str, Any]:
@@ -88,8 +92,8 @@ def validate_payload(d: Dict[str, Any], *, ocr_enabled: bool) -> Dict[str, Any]:
         if not has_coords:
             raise ValueError(
                 f"Pointer action '{na}' requires usable coordinates. "
-                f"Accepted args keys: x,y | cx,cy | bbox:[x1,y1,x2,y2] | coordinates/point/position/center/target/location:[x,y] or {{'x':x,'y':y}}. "
-                f"Found args: {list(args.keys())}"
+                f"Accepted args keys are: (x, y), (cx, cy), bbox: [x1, y1, x2, y2], or one of coordinates, point, position, center, target, location as a list [x, y] or a dictionary {{'x': x, 'y': y}}. "
+                f"No valid coordinate keys were found in the provided arguments: {list(args.keys())}"
             )
 
     return d

@@ -28,7 +28,7 @@ model: glm-4.5v
 # provider: gemini
 # model: gemini-1.5-pro
 temperature: 0.2
-max_output_tokens: 800
+max_output_tokens: 2000   # Increased to prevent JSON truncation
 dry_run: false            # LIVE MODE: execute real mouse/keyboard actions
 overlay:
   enabled: true            # ENABLED for visual debugging
