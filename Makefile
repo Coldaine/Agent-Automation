@@ -12,6 +12,9 @@ run:
 test:
 	uv run -m pytest -q
 
+smoke:
+	uv run -m pytest -q -k action_contract
+
 lint:
 	uv run ruff check .
 

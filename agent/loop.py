@@ -4,7 +4,7 @@ import json
 import os
 import time
 from typing import Any, Dict, List
-from agent.parser import parse_structured_output
+from agent.parser import parse_structured_output, parse_step, clean_model_text
 from tools.input import InputController
 from tools.screen import Screen
 from tools import overlay
@@ -68,6 +68,8 @@ class Stepper:
             self.session_log_fp.flush()
         except Exception:
             self.session_log_fp = None
+        # Error counters by type for observability
+        self.error_counts: Dict[str, int] = {}
         # Always-on overlay (optional)
         self._overlay_always_on = False
         try:
@@ -190,13 +192,29 @@ class Stepper:
                 "step_index": idx,
                 "raw_preview": (raw if isinstance(raw, str) else json.dumps(raw))[:1500]
             })
-            payload, err = parse_structured_output(raw if isinstance(raw, str) else json.dumps(raw))
-            if err:
-                payload = {"plan":"report parsing error","say":f"Parser error: {err}","next_action":"NONE","args":{},"done":False}
+            # Hardened parsing + validation with observability
+            run_id = os.path.basename(self.run_dir)
+            raw_text = raw if isinstance(raw, str) else json.dumps(raw)
+            cleaned_text = clean_model_text(raw_text)
+            parse_err = None
+            try:
+                payload = parse_step(raw_text, ocr_enabled=bool(self.cfg.get("ocr", {}).get("enabled", False)))
+                err = ""
+            except Exception as e:
+                parse_err = str(e)
+                # Increment counters
+                key = "parse_error"
+                self.error_counts[key] = self.error_counts.get(key, 0) + 1
+                payload = {"plan":"report parsing error","say":f"Parser error: {parse_err}","next_action":"NONE","args":{},"done":False}
+                err = parse_err
+            # Debug log minimal but actionable
             self._log_debug({
                 "type": "model_parsed",
                 "step_index": idx,
-                "err": err,
+                "run_id": run_id,
+                "raw": raw_text[:1500],
+                "cleaned": cleaned_text[:1500],
+                "parse_error": parse_err,
                 "parsed_preview": {k: payload.get(k) for k in ["plan","next_action","args","done"]}
             })
             act = payload["next_action"]
@@ -528,3 +546,12 @@ class Stepper:
                 break
             time.sleep(max(0, min_interval_ms/1000.0))
         say_to_user("Task complete." if done else "Stopping (max steps or user stop).")
+        # On session end, emit error counters (if any)
+        try:
+            if self.error_counts:
+                self._log_debug({"type": "error_summary", "counts": self.error_counts})
+                if getattr(self, "session_log_fp", None):
+                    self.session_log_fp.write(json.dumps({"type": "error_summary", "counts": self.error_counts}) + "\n")
+                    self.session_log_fp.flush()
+        except Exception:
+            pass

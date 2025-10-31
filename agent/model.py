@@ -30,10 +30,11 @@ class OpenAIAdapter(BaseModelAdapter):
     def step(self, instruction: str, last_observation: str, recent_steps, image_b64_jpeg):
         system_prompt = (
             "You are DesktopOps: a careful, step-by-step desktop operator. "
-            "Return ONLY a JSON object with keys: plan, say, next_action, args, done. "
-            "next_action ∈ {MOVE, CLICK, DOUBLE_CLICK, RIGHT_CLICK, TYPE, HOTKEY, SCROLL, DRAG, WAIT, NONE}. "
-            "Keep 'plan' concise (<=80 chars). Use absolute screen coordinates for pointer actions when needed. "
-            "If you need the user, set next_action:'NONE' and done:false with a clear 'say'."
+            "Return ONLY a single JSON object with keys: plan, say, next_action, args, done. No prose or code fences. "
+            "next_action must be one of: MOVE, CLICK, DOUBLE_CLICK, RIGHT_CLICK, TYPE, HOTKEY, SCROLL, DRAG, WAIT, NONE, CLICK_TEXT, UIA_INVOKE, UIA_SET_VALUE. "
+            "If the task is complete, you MUST set {\"next_action\":\"NONE\",\"done\":true}. Do not use DONE. "
+            "If OCR is not available, do not use CLICK_TEXT. "
+            "Keep 'plan' concise (<=80 chars). Use absolute screen coordinates for pointer actions when needed."
         )
         messages = [
             {"role": "system", "content": system_prompt},
@@ -83,7 +84,10 @@ class AnthropicAdapter(BaseModelAdapter):
         self.max_output_tokens = max_output_tokens
 
     def step(self, instruction: str, last_observation: str, recent_steps, image_b64_jpeg):
-        content = [{"type": "text", "text": "Return ONLY JSON with keys: plan,say,next_action,args,done."}]
+        content = [{"type": "text", "text": (
+            "Return ONLY a single JSON object with keys: plan,say,next_action,args,done. No prose. "
+            "If done, set next_action:'NONE' and done:true. Do not use DONE. If OCR is not available, do not use CLICK_TEXT."
+        )}]
         if image_b64_jpeg:
             import base64
             content.append({"type":"image", "source": {"type":"base64","media_type":"image/jpeg","data": image_b64_jpeg.split(",")[1]}})
@@ -149,6 +153,7 @@ class ZhipuAdapter(BaseModelAdapter):
             "You are DesktopOps: a careful, step-by-step desktop operator. "
             "Return ONLY a valid JSON object (no markdown fences) with these exact keys: plan, say, next_action, args, done. "
             "next_action must be one of: MOVE, CLICK, DOUBLE_CLICK, RIGHT_CLICK, TYPE, HOTKEY, SCROLL, DRAG, WAIT, NONE, CLICK_TEXT, UIA_INVOKE, UIA_SET_VALUE. "
+            "If the task is complete, you MUST set {\"next_action\":\"NONE\",\"done\":true}. Do not use DONE. "
             "args must be a JSON object. done must be boolean. Keep 'plan' concise (<=80 chars). "
             "IMPORTANT: Only use CLICK_TEXT if OCR is explicitly available in the user's message. If OCR is not available, never use CLICK_TEXT; instead, use CLICK with explicit absolute screen coordinates. "
             "When using pointer actions (MOVE/CLICK/DOUBLE_CLICK/RIGHT_CLICK/DRAG), you must return ABSOLUTE screen coordinates in the current screen space."
@@ -269,7 +274,7 @@ class GeminiAdapter(BaseModelAdapter):
 
     def step(self, instruction: str, last_observation: str, recent_steps, image_b64_jpeg):
         parts = [
-            "Return ONLY JSON with keys: plan,say,next_action,args,done.",
+            "Return ONLY a single JSON object with keys: plan,say,next_action,args,done. No prose. If done, set next_action:'NONE' and done:true. Do not use DONE. If OCR is not available, do not use CLICK_TEXT.",
             f"Instruction: {instruction}",
             f"Last observation: {last_observation}",
             f"Recent steps: {recent_steps[-6:] if recent_steps else []}",
