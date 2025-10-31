@@ -104,70 +104,71 @@ class Stepper:
                 observation = self.input.drag(int(args.get("x",0)), int(args.get("y",0)), float(args.get("duration",0.2)))
             elif act == "WAIT":
                 observation = self.input.wait(float(args.get("seconds",0.5)))
-            elif act == "CLICK_TEXT":
-                # OCR-assisted click by visible text
-                try:
-                    from tools.ocr import OCRTargeter
-                    shot_img = pil_img
-                    ocrc = self.cfg.get("ocr", {})
-                    targeter = getattr(self, "_ocr_targeter", None)
-                    if targeter is None:
-                        targeter = self._ocr_targeter = OCRTargeter(
-                            language=ocrc.get("language","eng"),
-                            psm=int(ocrc.get("psm",6)),
-                            oem=int(ocrc.get("oem",3)),
-                        )
-                    query = str(args.get("text", "")).strip()
-                    min_score = float(args.get("min_score", ocrc.get("min_score", 0.70)))
-                    region = ocrc.get("region", None)
-                    matches = targeter.find_text(
-                        shot_img,
-                        query,
-                        min_score=min_score,
-                        region=tuple(region) if region else None,
-                    )
-                    if matches:
-                        top = matches[0]
-                        cx = top.x + top.w // 2
-                        cy = top.y + top.h // 2
-                        observation = self.input.click(cx, cy, button="left", clicks=1, interval=0.1)
-                        if overlay_enabled:
-                            overlay.show_crosshair(int(cx), int(cy), overlay_ms)
-                    else:
-                        observation = f"no match for text '{query}' (min_score={min_score})"
-                except Exception as e:
-                    observation = f"OCR error: {e}"
-            elif act == "UIA_INVOKE":
-                try:
-                    from tools.win_uia import WinUIA
-                    uia = getattr(self, "_uia", None)
-                    if uia is None:
-                        uia = self._uia = WinUIA(timeout_ms=int(self.cfg.get("windows_uia",{}).get("timeout_ms",1500)))
-                    selector = args.get("selector", {})
-                    scope = args.get("scope", "active_window")
-                    found = uia.find(selector, scope=scope)
-                    observation = "UIA_INVOKE: no matches"
-                    if found:
-                        ok = uia.invoke(found[0])
-                        observation = f"UIA_INVOKE: {'ok' if ok else 'failed'}"
-                except Exception as e:
-                    observation = f"UIA error: {e}"
-            elif act == "UIA_SET_VALUE":
-                try:
-                    from tools.win_uia import WinUIA
-                    uia = getattr(self, "_uia", None)
-                    if uia is None:
-                        uia = self._uia = WinUIA(timeout_ms=int(self.cfg.get("windows_uia",{}).get("timeout_ms",1500)))
-                    selector = args.get("selector", {})
-                    value = str(args.get("value", ""))
-                    scope = args.get("scope", "active_window")
-                    found = uia.find(selector, scope=scope)
-                    observation = "UIA_SET_VALUE: no matches"
-                    if found:
-                        ok = uia.set_value(found[0], value)
-                        observation = f"UIA_SET_VALUE: {'ok' if ok else 'failed'}"
-                except Exception as e:
-                    observation = f"UIA error: {e}"
+            # Phase 2 actions disabled - need implementation fixes
+            # elif act == "CLICK_TEXT":
+            #     # OCR-assisted click by visible text
+            #     try:
+            #         from tools.ocr import OCRTargeter
+            #         shot_img = pil_img
+            #         ocrc = self.cfg.get("ocr", {})
+            #         targeter = getattr(self, "_ocr_targeter", None)
+            #         if targeter is None:
+            #             targeter = self._ocr_targeter = OCRTargeter(
+            #                 language=ocrc.get("language","eng"),
+            #                 psm=int(ocrc.get("psm",6)),
+            #                 oem=int(ocrc.get("oem",3)),
+            #             )
+            #         query = str(args.get("text", "")).strip()
+            #         min_score = float(args.get("min_score", ocrc.get("min_score", 0.70)))
+            #         region = ocrc.get("region", None)
+            #         matches = targeter.find_text(
+            #             shot_img,
+            #             query,
+            #             min_score=min_score,
+            #             region=tuple(region) if region else None,
+            #         )
+            #         if matches:
+            #             top = matches[0]
+            #             cx = top.x + top.w // 2
+            #             cy = top.y + top.h // 2
+            #             observation = self.input.click(cx, cy, button="left", clicks=1, interval=0.1)
+            #             if overlay_enabled:
+            #                 overlay.show_crosshair(int(cx), int(cy), overlay_ms)
+            #         else:
+            #             observation = f"no match for text '{query}' (min_score={min_score})"
+            #     except Exception as e:
+            #         observation = f"OCR error: {e}"
+            # elif act == "UIA_INVOKE":
+            #     try:
+            #         from tools.win_uia import WinUIA
+            #         uia = getattr(self, "_uia", None)
+            #         if uia is None:
+            #             uia = self._uia = WinUIA(timeout_ms=int(self.cfg.get("windows_uia",{}).get("timeout_ms",1500)))
+            #         selector = args.get("selector", {})
+            #         scope = args.get("scope", "active_window")
+            #         found = uia.find(selector, scope=scope)
+            #         observation = "UIA_INVOKE: no matches"
+            #         if found:
+            #             ok = uia.invoke(found[0])
+            #             observation = f"UIA_INVOKE: {'ok' if ok else 'failed'}"
+            #     except Exception as e:
+            #         observation = f"UIA error: {e}"
+            # elif act == "UIA_SET_VALUE":
+            #     try:
+            #         from tools.win_uia import WinUIA
+            #         uia = getattr(self, "_uia", None)
+            #         if uia is None:
+            #             uia = self._uia = WinUIA(timeout_ms=int(self.cfg.get("windows_uia",{}).get("timeout_ms",1500)))
+            #         selector = args.get("selector", {})
+            #         value = str(args.get("value", ""))
+            #         scope = args.get("scope", "active_window")
+            #         found = uia.find(selector, scope=scope)
+            #         observation = "UIA_SET_VALUE: no matches"
+            #         if found:
+            #             ok = uia.set_value(found[0], value)
+            #             observation = f"UIA_SET_VALUE: {'ok' if ok else 'failed'}"
+            #     except Exception as e:
+            #         observation = f"UIA error: {e}"
             elif act == "NONE":
                 observation = "no-op"
             else:

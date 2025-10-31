@@ -67,6 +67,13 @@ make format
 Key configuration (see `.ruff.toml`):
 - `fix = true`, `line-length = 100`, `target-version = "py310"`.
 - We ignore some stylistic rules to preserve compact code (e.g., multiple statements/imports per line).
+## Platform Support
+
+**Windows is the primary supported platform** for full testing and development. Cross-platform support (macOS/Linux) is not a priority and testing on these platforms may have limited functionality or require additional setup.
+
+### Testing Scope
+- **Windows**: Full functionality including Windows-only integration tests
+- **macOS/Linux**: Limited testing with cross-platform fallbacks; not a priority
 - Black is intentionally removed from the workflow.
 
 ## Smoke scenarios

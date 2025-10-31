@@ -45,8 +45,15 @@ class WinUIA:
             kwargs["control_type"] = selector["control_type"]
 
         try:
-            matches = root.descendants(**kwargs)
-        except Exception:
+            # Get the actual wrapper object first, then search descendants
+            # WindowSpecification.wrapper_object gives us the BaseWrapper
+            root_elem = root.wrapper_object
+            matches = root_elem.descendants(**kwargs)
+        except Exception as e:
+            import sys
+            print(f"WinUIA.find exception: {e}", file=sys.stderr)
+            import traceback
+            traceback.print_exc()
             matches = []
         results = []
         for el in matches[:30]:  # cap to avoid perf issues

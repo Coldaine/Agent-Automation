@@ -88,6 +88,7 @@ See `config.yaml`:
 
 ---
 
+- **Windows is the primary supported platform.** Cross-platform support (macOS/Linux) is not a priority and may have limited functionality or require additional setup.
 ## Limitations
 - Wayland Linux may restrict synthetic input; X11 or compositor permissions may be required.
 - macOS requires **Accessibility** and **Screen Recording** permission for OS control and screenshots. See `/docs/dependencies.md`.

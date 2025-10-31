@@ -36,6 +36,9 @@ uv sync || (uv venv; uv pip install -r requirements.txt)
 - **Anthropic** — Claude SDK.
 - **Google Gemini** — image understanding.
 
+## OS Support
+
+**Windows is the primary supported platform** with full functionality and optimizations. Cross-platform support for macOS and Linux is not a priority and may have limited functionality or require additional setup.
 ## OS permissions
 ### macOS
 - **Accessibility** (keyboard & mouse control)

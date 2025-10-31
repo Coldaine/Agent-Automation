@@ -35,6 +35,20 @@ User chat -> TUI (ui/console)
 *Windows-specific*
 - Prefer native ImageGrab and win32 input. Fallbacks emit warnings rather than failing silently.
 
+## Framework choices (Windows-first rationale)
+The DesktopOps Agent prioritizes Windows with native optimizations while providing cross-platform fallbacks for compatibility. While the project uses cross-platform libraries, **Windows is the primary and supported platform**.
+
+**Primary Platform (Windows):**
+- **pywin32**: Native win32 API for faster mouse/keyboard input
+- **PIL.ImageGrab**: Native Windows screenshot (faster than mss)
+- **pywinauto**: Windows UI Automation for semantic element control
+- **pytesseract**: OCR text recognition (requires Tesseract binary)
+
+**Cross-platform fallbacks (for macOS/Linux compatibility):**
+- **PyAutoGUI**: Simple, cross‑platform mouse/keyboard input when native APIs unavailable
+- **MSS**: Fast, pure‑Python screenshots when native Windows capture unavailable
+- **Structured outputs**: OpenAI JSON Schema / similar patterns
+- **Provider flexibility**: Stubs for Anthropic/Gemini
 ## Framework choices (rationale)
 - **PyAutoGUI**: simple, cross‑platform mouse/keyboard.
 - **MSS**: fast, pure‑Python screenshots.

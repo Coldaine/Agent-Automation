@@ -2,8 +2,13 @@ import os
 import platform
 import threading
 import time
+import logging
 
 import pytest
+
+
+logger = logging.getLogger(__name__)
+logging.basicConfig(level=logging.DEBUG)
 
 
 WINDOWS = platform.system().lower() == "windows"
@@ -69,14 +74,19 @@ def test_ocr_find_text_and_click(tmp_path):
     img = screen.capture()
     ocr = OCRTargeter(language="eng", psm=6, oem=3)
     matches = ocr.find_text(img, "Integration", min_score=0.8)
-    assert matches, "OCR did not detect expected text 'Integration'"
+    logger.debug("OCR matches: %s", matches)
+    if not matches:
+        pytest.fail("OCR did not detect expected text 'Integration' - see logs for image and OCR output")
 
     # Click roughly at the first match center (verifies live input path). This should be harmless.
     top = matches[0]
     cx, cy = top.x + top.w // 2, top.y + top.h // 2
     ic = InputController(dry_run=False)
     obs = ic.click(cx, cy, button="left", clicks=1)
-    assert obs == "clicked"
+    if obs != "clicked":
+        pytest.fail(f"Click failed or unexpected return: {obs}")
 
-    # Wait for window thread to finish
+    # Wait for window thread to finish, but fail fast if it doesn't
     th.join(timeout=5)
+    if th.is_alive():
+        pytest.fail("OCR test window thread did not exit within timeout")

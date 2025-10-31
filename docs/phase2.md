@@ -1,3 +1,6 @@
+# DesktopOps Agent Phase 2 Features (Windows-Optimized)
+
+**Note: Windows is the primary supported platform for these features. Cross-platform support (macOS/Linux) is not a priority and may have limited functionality.**
 What you’re getting (quick map)
 Module	File	Purpose	New actions (optional)
 Overlay visualizer (always-on cursor tracker)	tools/overlay.py (updated)	transient click indicator and optional always-on halo that follows the cursor	(none)

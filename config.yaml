@@ -31,12 +31,12 @@ hotkeys:
   stop: "ctrl+alt+s"
 
 windows_uia:
-  enabled: true            # Enable by default on Windows for semantic control
+  enabled: false           # Disabled - Phase 2 feature needs implementation fixes
   timeout_ms: 1500
-  prefer_uia: true         # Prefer UIA over pixel coordinates when available
+  prefer_uia: false
 
 ocr:
-  enabled: true            # Enable by default for CLICK_TEXT support
+  enabled: false           # Disabled - Phase 2 feature (requires Tesseract)
   language: eng
   min_score: 0.70
   psm: 6

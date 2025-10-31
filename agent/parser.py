@@ -8,8 +8,8 @@ REQUIRED_KEYS = {"plan", "next_action", "args", "done"}
 VALID_ACTIONS = {
     "MOVE","CLICK","DOUBLE_CLICK","RIGHT_CLICK","TYPE","HOTKEY",
     "SCROLL","DRAG","WAIT","NONE",
-    # Phase 2 actions
-    "CLICK_TEXT","UIA_INVOKE","UIA_SET_VALUE"
+    # Phase 2 actions (disabled - need implementation fixes)
+    # "CLICK_TEXT","UIA_INVOKE","UIA_SET_VALUE"
 }
 
 def parse_structured_output(raw_text: str) -> Tuple[Dict[str, Any], str]:
