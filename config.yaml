@@ -1,17 +1,34 @@
-# Model Configuration
-# Available providers: openai | zhipu | anthropic | gemini | dummy
+# Windows-Optimized Model Configuration
+# Available providers: openai | zhipu | anthropic | gemini
+# Configuration focused exclusively on Windows-supported vision providers
 #
-# Option 1: OpenAI GPT-5 (highest quality, higher cost)
+# ⚠️ CRITICAL: For Zhipu, always use model "glm-4.5v" (the vision model)
+# ⚠️ DO NOT change ZHIPU_BASE_URL - it MUST be https://api.z.ai/api/coding/paas/v4
+#
+# Windows-Only Vision Provider Options:
+#
+# Option 1: Z.ai GLM-4.5V (vision + coding model) - ACTIVE
+provider: zhipu
+model: glm-4.5v
+#
+# Option 2: OpenAI GPT-5 (highest quality, higher cost)
 # provider: openai
 # model: gpt-5-2025-08-07
 #
-# Option 2: Z.ai GLM-4.6 (coding plan model) - ACTIVE
-provider: zhipu
-model: glm-4.6
+# Option 3: OpenAI GPT-4o (balanced performance)
+# provider: openai
+# model: gpt-4o
 #
+# Option 4: Anthropic Claude (vision capable)
+# provider: anthropic
+# model: claude-3-5-sonnet-20241022
+#
+# Option 5: Google Gemini (vision capable)
+# provider: gemini
+# model: gemini-1.5-pro
 temperature: 0.2
 max_output_tokens: 800
-dry_run: true             # set to false for real control
+dry_run: false            # LIVE MODE - real clicks and typing!
 overlay:
   enabled: false
   duration_ms: 250

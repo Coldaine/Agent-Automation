@@ -33,6 +33,10 @@ uv sync || (uv venv; uv pip install -r requirements.txt)
 
 ## Provider SDKs (optional)
 - **OpenAI** — structured outputs + multimodal via Chat Completions.
+- **Zhipu (Z.ai)** — GLM-4.5V vision model via OpenAI-compatible API.
+	- ⚠️ **CRITICAL**: Must use model `glm-4.5v` (not glm-4.6 or glm-4.5)
+	- ⚠️ **CRITICAL**: Base URL must be `https://api.z.ai/api/coding/paas/v4`
+	- DO NOT change to `/api/paas/v4` - the `/coding/` path is required!
 - **Anthropic** — Claude SDK.
 - **Google Gemini** — image understanding.
 

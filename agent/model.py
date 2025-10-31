@@ -8,24 +8,7 @@ class BaseModelAdapter:
              image_b64_jpeg: Optional[str]) -> Dict[str, Any]:
         raise NotImplementedError
 
-class DummyAdapter(BaseModelAdapter):
-    def step(self, instruction: str, last_observation: str, recent_steps, image_b64_jpeg):
-        if not recent_steps:
-            return {
-                "plan": "type the instruction as text",
-                "say": "Focusing text field and typing your instruction.",
-                "next_action": "TYPE",
-                "args": {"text": instruction[:80]},
-                "done": False
-            }
-        else:
-            return {
-                "plan": "finish",
-                "say": "Done.",
-                "next_action": "NONE",
-                "args": {},
-                "done": True
-            }
+
 
 class OpenAIAdapter(BaseModelAdapter):
     def __init__(self, model: str, temperature: float, max_output_tokens: int):
@@ -110,9 +93,14 @@ class AnthropicAdapter(BaseModelAdapter):
         return msg.content[0].text
 
 class ZhipuAdapter(BaseModelAdapter):
-    """Z.ai (Zhipu) adapter using OpenAI-compatible coding plan endpoint."""
+    """Z.ai (Zhipu) adapter - use GLM-4.5V for vision support.
+    
+    CRITICAL: Base URL MUST be https://api.z.ai/api/coding/paas/v4
+    DO NOT change this to /api/paas/v4 - the /coding/ path is required!
+    """
     def __init__(self, model: str, temperature: float, max_output_tokens: int):
         from openai import OpenAI
+        # DO NOT MODIFY: This specific endpoint is required for Z.ai API access
         base_url = os.environ.get("ZHIPU_BASE_URL", "https://api.z.ai/api/coding/paas/v4")
         self.client = OpenAI(
             api_key=os.environ.get("ZHIPU_API_KEY"),
@@ -133,18 +121,18 @@ class ZhipuAdapter(BaseModelAdapter):
 
         user_content = f"Instruction: {instruction}\nLast observation: {last_observation}\nRecent steps: {recent_steps[-6:] if recent_steps else []}\nRespond with the required JSON object."
 
-        # Z.ai coding plan API - simplified message format
+        # Z.ai API - use GLM-4.5V for vision support
         messages = [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_content}
         ]
 
-        # Note: Z.ai may not fully support multimodal yet, skipping image for now
-        # if image_b64_jpeg:
-        #     messages[1]["content"] = [
-        #         {"type": "text", "text": user_content},
-        #         {"type": "image_url", "image_url": {"url": image_b64_jpeg}}
-        #     ]
+        # GLM-4.5V supports multimodal vision
+        if image_b64_jpeg:
+            messages[1]["content"] = [
+                {"type": "text", "text": user_content},
+                {"type": "image_url", "image_url": {"url": image_b64_jpeg}}
+            ]
 
         # Simple retry loop with bounded attempts
         for attempt in range(3):
@@ -198,6 +186,4 @@ def get_adapter(provider: str, model: str, temperature: float, max_output_tokens
         return GeminiAdapter(model, temperature, max_output_tokens)
     if provider == "zhipu":
         return ZhipuAdapter(model, temperature, max_output_tokens)
-    if provider == "dummy":
-        return DummyAdapter()
     raise ValueError(f"Unknown provider: {provider}")
