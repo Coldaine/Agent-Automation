@@ -4,6 +4,7 @@ import io
 import os
 import platform
 from datetime import datetime, timezone
+import warnings
 from typing import Optional, Tuple
 from PIL import Image
 
@@ -32,7 +33,10 @@ class Screen:
                     img = ImageGrab.grab()
                 return img
             except Exception:
-                # Fall through to mss
+                # Fall through to mss with a one-time warning to avoid silent fallback
+                if not getattr(self, "_warned_fallback", False):
+                    warnings.warn("ImageGrab failed; falling back to mss for screenshots.")
+                    self._warned_fallback = True
                 pass
         
         # Fallback to mss for cross-platform

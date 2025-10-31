@@ -14,12 +14,38 @@ make test
 Current tests:
 - `tests/test_parser.py` — validates model JSON parsing and error handling.
 - `tests/test_loop_dryrun.py` — runs a dry-run stepper loop using the Dummy model (no OS actions) and a fake screenshot to avoid OS dependencies.
+- `tests/test_parser_new_actions.py` — ensures the parser accepts Windows Phase 2 actions.
+- `tests/test_loop_new_actions.py` — exercises new actions via fakes in dry-run.
 
 Guidelines for new tests:
 - Prefer unit tests with deterministic inputs; avoid real OS control.
 - Use the `dry_run` mode and mock/fake `Screen.capture_and_encode` like `test_loop_dryrun.py` does.
 - For provider adapters, mock SDK clients to avoid network calls.
 - If you add optional integration tests, gate them behind env flags (e.g., `ZHIPU_E2E=1`) and skip by default.
+
+## Live Windows integration tests (opt-in, no mocks)
+
+We include two Windows-only integration tests that exercise real UI Automation (UIA), OCR, and input. They are disabled by default and require an explicit opt-in to avoid unsafe runs on CI.
+
+Prerequisites:
+- Windows host with desktop session (not headless)
+- Tesseract OCR installed and on PATH (winget: `UB-Mannheim.TesseractOCR`)
+- Environment variable `RUN_LIVE_TESTS=1`
+
+Tests:
+- `tests/integration/test_live_uia_notepad.py`
+   - Launches Notepad, finds the Edit control via UIA, sets text, and cleans up.
+- `tests/integration/test_live_ocr_tk.py`
+   - Renders a Tk window with visible text, captures the screen, detects the text via Tesseract, and performs a real click at the detected location.
+
+Run (opt-in):
+```powershell
+$env:RUN_LIVE_TESTS = "1"
+uv run -m pytest -q tests/integration
+```
+Notes:
+- Tests will skip with a clear reason unless all prerequisites are met.
+- These tests avoid mocks and will fail loudly if a dependency is missing at runtime (e.g., Tesseract missing).
 
 ## Linting and formatting (Ruff-only)
 

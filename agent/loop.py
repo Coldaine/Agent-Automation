@@ -28,14 +28,19 @@ class Stepper:
         try:
             ao_cfg = self.cfg.get("overlay", {}).get("always_on", {})
             if bool(ao_cfg.get("enabled", False)):
-                overlay.start_always_on(
-                    radius=int(ao_cfg.get("radius", 18)),
-                    poll_ms=int(ao_cfg.get("poll_ms", 80)),
-                )
-                self._overlay_always_on = True
-        except Exception:
-            # Best-effort only
+                try:
+                    overlay.start_always_on(
+                        radius=int(ao_cfg.get("radius", 18)),
+                        poll_ms=int(ao_cfg.get("poll_ms", 80)),
+                    )
+                    self._overlay_always_on = True
+                except Exception as e:
+                    self._overlay_always_on = False
+                    # Non-silent: inform user overlay always-on could not start
+                    say_to_user(f"Overlay always-on not started: {e}")
+        except Exception as e:
             self._overlay_always_on = False
+            say_to_user(f"Overlay config error: {e}")
 
     def _log(self, obj: Dict[str, Any]):
         self.log_fp.write(json.dumps(obj, ensure_ascii=False) + "\n")
