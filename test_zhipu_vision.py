@@ -31,7 +31,7 @@ try:
         timeout=30,
     )
     
-    print(f"SUCCESS! Vision works!")
+    print("SUCCESS! Vision works!")
     print(f"Response: {resp.choices[0].message.content}")
     
 except Exception as e:

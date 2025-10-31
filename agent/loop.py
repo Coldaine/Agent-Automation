@@ -199,14 +199,12 @@ class Stepper:
             parse_err = None
             try:
                 payload = parse_step(raw_text, ocr_enabled=bool(self.cfg.get("ocr", {}).get("enabled", False)))
-                err = ""
             except Exception as e:
                 parse_err = str(e)
                 # Increment counters
                 key = "parse_error"
                 self.error_counts[key] = self.error_counts.get(key, 0) + 1
                 payload = {"plan":"report parsing error","say":f"Parser error: {parse_err}","next_action":"NONE","args":{},"done":False}
-                err = parse_err
             # Debug log minimal but actionable
             self._log_debug({
                 "type": "model_parsed",

@@ -23,7 +23,7 @@ def create_calibration_image(width, height):
     try:
         font = ImageFont.truetype("arial.ttf", 40)
         small_font = ImageFont.truetype("arial.ttf", 20)
-    except:
+    except Exception:
         font = ImageFont.load_default()
         small_font = ImageFont.load_default()
     

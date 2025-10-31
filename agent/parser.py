@@ -44,9 +44,7 @@ def clean_model_text(s: str) -> str:
 def _validate_schema_root(d: Any) -> Dict[str, Any]:
     if not isinstance(d, dict):
         raise ValueError("Root must be a JSON object")
-    # Minimal required keys for the loop; plan/say are optional
-    if "next_action" not in d or "done" not in d:
-        raise ValueError("Missing required keys: next_action, done")
+    # We perform some early checks based on next_action even before all required keys
     if "args" in d and not isinstance(d.get("args"), dict):
         raise ValueError("args must be an object if provided")
     d.setdefault("args", {})
@@ -61,6 +59,15 @@ def validate_payload(d: Dict[str, Any], *, ocr_enabled: bool) -> Dict[str, Any]:
     if d.get("next_action") == "DONE":
         raise ValueError('Invalid next_action: DONE (use {"next_action":"NONE","done":true})')
 
+    # Feature gating (check as early as possible to give crisp errors)
+    na_early = d.get("next_action")
+    if not ocr_enabled and na_early == "CLICK_TEXT":
+        raise ValueError("CLICK_TEXT not allowed when OCR is disabled")
+
+    # Minimal required keys for normal flow
+    if "next_action" not in d or "done" not in d:
+        raise ValueError("Missing required keys: next_action, done")
+
     if d.get("done") is True:
         if d.get("next_action") != "NONE":
             raise ValueError('When done:true, next_action must be "NONE"')
@@ -70,7 +77,7 @@ def validate_payload(d: Dict[str, Any], *, ocr_enabled: bool) -> Dict[str, Any]:
     if na not in ALLOWED_ACTIONS:
         raise ValueError(f"Invalid next_action: {na}")
 
-    # Feature gating
+    # Feature gating (redundant guard for completeness after normalization)
     if not ocr_enabled and na == "CLICK_TEXT":
         raise ValueError("CLICK_TEXT not allowed when OCR is disabled")
 

@@ -298,14 +298,14 @@ def test_process_coords():
             system_match = meta['scaling']['mode'] == expected_system
             
             if coord_match and system_match:
-                print(f"✅ PASSED")
+                print("✅ PASSED")
                 print(f"   Raw coords: {test_case['x_raw']}, {test_case['y_raw']}")
                 print(f"   Final coords: {x_final}, {y_final}")
                 print(f"   Coord system: {meta['scaling']['mode']}")
                 print(f"   Clamped: {clamped}")
                 passed += 1
             else:
-                print(f"❌ FAILED")
+                print("❌ FAILED")
                 print(f"   Raw coords: {test_case['x_raw']}, {test_case['y_raw']}")
                 print(f"   Expected final: {expected_final}, Got: {x_final}, {y_final}")
                 print(f"   Expected system: {expected_system}, Got: {meta['scaling']['mode']}")
