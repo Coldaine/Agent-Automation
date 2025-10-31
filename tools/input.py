@@ -88,12 +88,18 @@ class InputController:
         if self._win32:
             # For now, fallback to pyautogui for typing; win32 SendInput requires more complex setup
             if self._pg:
-                self._pg.typewrite(text, interval=interval)
-                return "typed"
+                try:
+                    self._pg.typewrite(text, interval=interval)
+                    return "typed"
+                except Exception as e:
+                    return f"type error: {e.__class__.__name__}"
         
         if self._pg:
-            self._pg.typewrite(text, interval=interval)
-            return "typed"
+            try:
+                self._pg.typewrite(text, interval=interval)
+                return "typed"
+            except Exception as e:
+                return f"type error: {e.__class__.__name__}"
         return "type failed"
 
     def hotkey(self, keys: List[str]) -> str:

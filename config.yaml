@@ -8,6 +8,7 @@
 # Windows-Only Vision Provider Options:
 #
 # Option 1: Z.ai GLM-4.5V (vision + coding model) - ACTIVE
+# Use a dummy provider for offline testing without API keys
 provider: zhipu
 model: glm-4.5v
 #
@@ -28,7 +29,7 @@ model: glm-4.5v
 # model: gemini-1.5-pro
 temperature: 0.2
 max_output_tokens: 800
-dry_run: false            # LIVE MODE - real clicks and typing!
+dry_run: false            # LIVE MODE: execute real mouse/keyboard actions
 overlay:
   enabled: true            # ENABLED for visual debugging
   duration_ms: 1000         # Show crosshair for 1 second

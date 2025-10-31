@@ -2,6 +2,11 @@ from __future__ import annotations
 # Environment: managed with 'uv' (https://github.com/astral-sh/uv). See README for setup.
 import os
 from typing import Any, Dict, List, Optional
+try:
+    from dotenv import load_dotenv  # type: ignore
+    load_dotenv()
+except Exception:
+    pass
 
 class BaseModelAdapter:
     def step(self, instruction: str, last_observation: str, recent_steps: List[Dict[str, Any]],
@@ -109,6 +114,35 @@ class ZhipuAdapter(BaseModelAdapter):
         self.model = model
         self.temperature = temperature
         self.max_output_tokens = max_output_tokens
+        # Provider-level structured logging to current run dir if available
+        self._provider_log_path = None
+        self._call_seq = 0
+        try:
+            debug_dir = os.environ.get("DESKTOPOPS_DEBUG_DIR")
+            if debug_dir:
+                os.makedirs(debug_dir, exist_ok=True)
+                self._provider_log_path = os.path.join(debug_dir, "provider_zhipu.jsonl")
+        except Exception:
+            self._provider_log_path = None
+
+    def set_debug_dir(self, debug_dir: str):
+        """Optional hook called by Stepper to set the current run directory."""
+        try:
+            if debug_dir:
+                os.makedirs(debug_dir, exist_ok=True)
+                self._provider_log_path = os.path.join(debug_dir, "provider_zhipu.jsonl")
+        except Exception:
+            pass
+
+    def _log_provider(self, obj: Dict[str, Any]):
+        try:
+            if not self._provider_log_path:
+                return
+            import json as _json
+            with open(self._provider_log_path, "a", encoding="utf-8") as fp:
+                fp.write(_json.dumps(obj, ensure_ascii=False) + "\n")
+        except Exception:
+            pass
 
     def step(self, instruction: str, last_observation: str, recent_steps, image_b64_jpeg):
         system_prompt = (
@@ -116,7 +150,8 @@ class ZhipuAdapter(BaseModelAdapter):
             "Return ONLY a valid JSON object (no markdown fences) with these exact keys: plan, say, next_action, args, done. "
             "next_action must be one of: MOVE, CLICK, DOUBLE_CLICK, RIGHT_CLICK, TYPE, HOTKEY, SCROLL, DRAG, WAIT, NONE, CLICK_TEXT, UIA_INVOKE, UIA_SET_VALUE. "
             "args must be a JSON object. done must be boolean. Keep 'plan' concise (<=80 chars). "
-            "You may use CLICK_TEXT {text,min_score?} for OCR, and UIA_INVOKE/UIA_SET_VALUE with a selector on Windows. Prefer UIA when available."
+            "IMPORTANT: Only use CLICK_TEXT if OCR is explicitly available in the user's message. If OCR is not available, never use CLICK_TEXT; instead, use CLICK with explicit absolute screen coordinates. "
+            "When using pointer actions (MOVE/CLICK/DOUBLE_CLICK/RIGHT_CLICK/DRAG), you must return ABSOLUTE screen coordinates in the current screen space."
         )
 
         user_content = f"Instruction: {instruction}\nLast observation: {last_observation}\nRecent steps: {recent_steps[-6:] if recent_steps else []}\nRespond with the required JSON object."
@@ -134,9 +169,37 @@ class ZhipuAdapter(BaseModelAdapter):
                 {"type": "image_url", "image_url": {"url": image_b64_jpeg}}
             ]
 
-        # Simple retry loop with bounded attempts
+        # Simple retry loop with bounded attempts + diagnostics
+        import time as _time
+        import traceback as _tb
+        self._call_seq += 1
         for attempt in range(3):
             try:
+                t0 = _time.perf_counter()
+                # Input diagnostics (redacted)
+                has_img = bool(image_b64_jpeg)
+                img_len = len(image_b64_jpeg) if has_img else 0
+                img_b64_bytes = 0
+                try:
+                    if has_img and "," in image_b64_jpeg:
+                        img_b64_bytes = len(image_b64_jpeg.split(",", 1)[1])
+                except Exception:
+                    img_b64_bytes = 0
+                self._log_provider({
+                    "type": "provider_call",
+                    "provider": "zhipu",
+                    "seq": self._call_seq,
+                    "attempt": attempt + 1,
+                    "endpoint_base": getattr(self.client, "base_url", None) or os.environ.get("ZHIPU_BASE_URL"),
+                    "model": self.model,
+                    "temperature": self.temperature,
+                    "max_tokens": self.max_output_tokens,
+                    "has_image": has_img,
+                    "image_b64_len": img_len,
+                    "image_b64_payload_bytes": img_b64_bytes,
+                    "instruction_preview": (instruction or "")[:300],
+                    "recent_steps_count": len(recent_steps) if recent_steps else 0,
+                })
                 resp = self.client.chat.completions.create(
                     model=self.model,
                     temperature=self.temperature,
@@ -144,12 +207,53 @@ class ZhipuAdapter(BaseModelAdapter):
                     max_tokens=self.max_output_tokens,
                     timeout=30,
                 )
+                dt_ms = int((_time.perf_counter() - t0) * 1000)
                 m = resp.choices[0].message
+                # Extract optional usage and ids if present
+                usage = None
+                try:
+                    usage = getattr(resp, "usage", None)
+                    if usage and not isinstance(usage, dict):
+                        usage = usage.model_dump() if hasattr(usage, "model_dump") else dict(usage)
+                except Exception:
+                    usage = None
+                finish_reason = None
+                try:
+                    finish_reason = getattr(resp.choices[0], "finish_reason", None)
+                except Exception:
+                    finish_reason = None
+                self._log_provider({
+                    "type": "provider_resp",
+                    "provider": "zhipu",
+                    "seq": self._call_seq,
+                    "attempt": attempt + 1,
+                    "duration_ms": dt_ms,
+                    "id": getattr(resp, "id", None),
+                    "model": getattr(resp, "model", self.model),
+                    "created": getattr(resp, "created", None),
+                    "choices": len(getattr(resp, "choices", []) or []),
+                    "finish_reason": finish_reason,
+                    "usage": usage,
+                    "message_preview": (m.content if isinstance(m.content, str) else str(m.content))[:800],
+                })
                 return m.content
             except Exception:  # network/timeouts/rate limits
-                import time as _t
-                _t.sleep(0.5 * (attempt + 1))
+                err_txt = _tb.format_exc(limit=2)
+                self._log_provider({
+                    "type": "provider_error",
+                    "provider": "zhipu",
+                    "seq": self._call_seq,
+                    "attempt": attempt + 1,
+                    "error": err_txt[:1200],
+                })
+                _time.sleep(0.5 * (attempt + 1))
         # Fallback payload if all attempts failed
+        self._log_provider({
+            "type": "provider_fallback",
+            "provider": "zhipu",
+            "seq": self._call_seq,
+            "attempts": 3,
+        })
         return (
             '{"plan":"handle provider error","say":"Temporary provider error; please retry.",'
             '"next_action":"NONE","args":{},"done":false}'
@@ -177,7 +281,36 @@ class GeminiAdapter(BaseModelAdapter):
         resp = self.model.generate_content(parts + imgs, generation_config={"temperature": self.temperature, "max_output_tokens": self.max_output_tokens})
         return resp.text
 
+class DummyAdapter(BaseModelAdapter):
+    """A minimal adapter for offline/dry-run testing without provider keys.
+    Returns deterministic actions to exercise the loop without network calls.
+    """
+    def __init__(self):
+        pass
+
+    def step(self, instruction: str, last_observation: str, recent_steps, image_b64_jpeg):
+        # Simple heuristic: if the instruction mentions 'type', return TYPE
+        inst = (instruction or "").lower()
+        if "type" in inst:
+            return {
+                "plan": "type the requested text",
+                "say": "Typing as requested.",
+                "next_action": "TYPE",
+                "args": {"text": instruction.replace("type", "").strip() or "hello world"},
+                "done": True,
+            }
+        # Otherwise, return a CLICK at a fixed absolute coordinate for testing
+        return {
+            "plan": "click a known absolute coordinate",
+            "say": "Clicking test point.",
+            "next_action": "CLICK",
+            "args": {"x": 1200, "y": 800, "button": "left"},
+            "done": True,
+        }
+
 def get_adapter(provider: str, model: str, temperature: float, max_output_tokens: int) -> BaseModelAdapter:
+    if provider == "dummy":
+        return DummyAdapter()
     if provider == "openai":
         return OpenAIAdapter(model, temperature, max_output_tokens)
     if provider == "anthropic":
